@@ -1,0 +1,36 @@
+{
+  "name": "apisix-dashboard-next",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace web",
+    "build": "npm run build --workspace web",
+    "typecheck": "npm run typecheck --workspace web",
+    "test:web": "npm run test --workspace web",
+    "test:e2e": "playwright test",
+    "test:integration": "node scripts/test-integration.mjs",
+    "test:routes": "node scripts/test-route-editor.mjs",
+    "test:consumers": "node scripts/test-consumers.mjs",
+    "test:consumer-plugins": "node scripts/test-consumer-plugins.mjs",
+    "format": "prettier --write web/src tests scripts --ignore-unknown",
+    "format:check": "prettier --check web/src tests scripts --ignore-unknown",
+    "seed": "node scripts/seed-sandbox.mjs",
+    "start:sandbox": "docker compose --profile gateway up -d --build",
+    "start": "docker compose up -d --build",
+    "stop": "docker compose stop"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "dompurify": "^3.4.17",
+    "prettier": "^3.6.2"
+  },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "3.4.17"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+name: apisix-dashboard-p1-stream-test
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    environment:
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+    healthcheck:
+      test: ['CMD', 'etcdctl', 'endpoint', 'health']
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  gateway:
+    image: apache/apisix:3.19.0-debian
+    depends_on:
+      etcd: { condition: service_healthy }
+    configs:
+      - source: stream
+        target: /usr/local/apisix/conf/config.yaml
+  echo:
+    image: nginx:latest
+  verify:
+    image: golang:1.27.3-bookworm
+    depends_on: [gateway, echo]
+    working_dir: /src
+    environment:
+      P1_STREAM_SANDBOX: '1'
+    volumes:
+      - ../../server:/src:ro
+      - modules:/go/pkg/mod
+      - build:/root/.cache/go-build
+    command:
+      ['go', 'test', './internal/console', '-run', '^TestIsolatedStreamGateway$', '-count=1', '-v']
+configs:
+  stream:
+    content: |
+      apisix:
+        proxy_mode: http&stream
+        stream_proxy:
+          tcp:
+            - 9100
+      deployment:
+        admin:
+          allow_admin: [0.0.0.0/0]
+          admin_key:
+            - name: stream-fixture
+              key: isolated-stream-fixture
+              role: admin
+        etcd:
+          host: ["http://etcd:2379"]
+volumes:
+  modules:
+    external: true
+    name: apisix-dashboard-next-go-mod
+  build:
+    external: true
+    name: apisix-dashboard-next-go-build
+networks:
+  default:
+    internal: true

@@ -1,0 +1,10 @@
+services:
+  dashboard:
+    image: golang:1.27.3-bookworm
+    build: !reset null
+    entrypoint: ["/work/.local/dashboard-server"]
+    working_dir: /work
+    environment:
+      LISTEN_ADDR: 0.0.0.0:8080
+      STATIC_DIR: /work/web/dist
+    volumes: [".:/work:ro"]

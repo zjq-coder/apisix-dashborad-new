@@ -1,0 +1,12 @@
+Apache APISIX Plugin Hub artwork
+https://apisix.apache.org/zh/plugins/
+https://github.com/apache/apisix-website
+
+img/ contains the original SVG files served by the website. Each file under
+symbols/ preserves the viewBox and artwork of the corresponding symbol from
+https://apisix.apache.org/js/plugin-icon.js in a standalone SVG wrapper.
+See LICENSE.txt and symbols/LICENSE.txt for the upstream license texts.
+Product names and logos belong to their respective owners.
+
+Update from the project root with python scripts/sync-plugin-hub.py
+Verify against the live hub with python scripts/sync-plugin-hub.py --check

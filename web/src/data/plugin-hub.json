@@ -1,0 +1,161 @@
+[
+  {
+    "name": "流量管理",
+    "color": "#b42318",
+    "plugins": {
+      "limit-req": "symbols/iconlimit-req.svg",
+      "limit-conn": "symbols/iconlimit-conn.svg",
+      "limit-count": "symbols/iconlimit-count.svg",
+      "proxy-cache": "symbols/iconproxy-cache.svg",
+      "request-validation": "symbols/iconrequest-validation.svg",
+      "proxy-mirror": "symbols/iconproxy-mirror.svg",
+      "api-breaker": "symbols/iconapi-breaker.svg",
+      "traffic-split": "symbols/icontraffic-split.svg",
+      "request-id": "symbols/iconrequest-id.svg",
+      "attach-consumer-label": "img/plugin/apisix.svg",
+      "proxy-control": "img/plugin/apisix.svg",
+      "client-control": "img/plugin/apisix.svg",
+      "traffic-label": "img/plugin/apisix.svg"
+    }
+  },
+  {
+    "name": "请求与响应转换",
+    "color": "#175cd3",
+    "plugins": {
+      "response-rewrite": "symbols/iconresponse-rewrite.svg",
+      "proxy-rewrite": "symbols/iconproxy-rewrite.svg",
+      "grpc-transcode": "symbols/icongrpc-transcode.svg",
+      "grpc-web": "img/integrations/grpc.svg",
+      "body-transformer": "img/plugin/apisix.svg",
+      "degraphql": "img/integrations/graphql.svg",
+      "exit-transformer": "img/plugin/apisix.svg",
+      "fault-injection": "symbols/iconfault-injection.svg",
+      "gm": "img/plugin/apisix.svg",
+      "mocking": "img/plugin/apisix.svg"
+    }
+  },
+  {
+    "name": "认证",
+    "color": "#027a48",
+    "plugins": {
+      "key-auth": "symbols/iconkey-auth.svg",
+      "jwt-auth": "symbols/iconjwt-auth.svg",
+      "basic-auth": "symbols/iconbasic-auth.svg",
+      "authz-keycloak": "symbols/iconauthz-keycloak.svg",
+      "authz-casdoor": "img/plugin/apisix.svg",
+      "wolf-rbac": "symbols/iconwolf-rbac.svg",
+      "openid-connect": "symbols/iconopenid-connect.svg",
+      "cas-auth": "img/plugin/apisix.svg",
+      "hmac-auth": "symbols/iconhmac-auth.svg",
+      "authz-casbin": "symbols/iconauthz-casbin.svg",
+      "ldap-auth": "img/plugin/apisix.svg",
+      "jwe-decrypt": "img/plugin/apisix.svg",
+      "multi-auth": "img/plugin/apisix.svg",
+      "opa": "img/integrations/opa.svg",
+      "forward-auth": "img/plugin/apisix.svg"
+    }
+  },
+  {
+    "name": "安全",
+    "color": "#b54708",
+    "plugins": {
+      "cors": "symbols/iconcors.svg",
+      "uri-blocker": "symbols/iconuri-blocker.svg",
+      "ip-restriction": "symbols/iconip-restriction.svg",
+      "ua-restriction": "img/plugin/apisix.svg",
+      "referer-restriction": "symbols/iconreferer-restriction.svg",
+      "consumer-restriction": "symbols/iconconsumer-restriction.svg",
+      "csrf": "img/plugin/apisix.svg",
+      "chaitin-waf": "img/integrations/safeline.svg",
+      "oas-validator": "img/integrations/openapi.svg",
+      "ocsp-stapling": "img/plugin/apisix.svg",
+      "public-api": "img/plugin/apisix.svg"
+    }
+  },
+  {
+    "name": "AI",
+    "color": "#6941c6",
+    "plugins": {
+      "ai-proxy": "img/plugin/ai.svg",
+      "ai-proxy-multi": "img/plugin/ai.svg",
+      "ai-request-rewrite": "img/plugin/ai.svg",
+      "ai-rate-limiting": "img/plugin/ai.svg",
+      "ai-prompt-decorator": "img/plugin/ai.svg",
+      "ai-prompt-template": "img/plugin/ai.svg",
+      "ai-prompt-guard": "img/plugin/ai.svg",
+      "ai-aws-content-moderation": "img/integrations/aws.svg",
+      "ai-aliyun-content-moderation": "img/integrations/alibabacloud.svg",
+      "ai-rag": "img/plugin/ai.svg"
+    }
+  },
+  {
+    "name": "可观测性",
+    "color": "#0e7090",
+    "plugins": {
+      "zipkin": "symbols/iconzipkin.svg",
+      "skywalking": "symbols/iconskywalking.svg",
+      "opentelemetry": "img/integrations/opentelemetry.svg",
+      "prometheus": "symbols/iconprometheus.svg",
+      "node-status": "img/plugin/apisix.svg",
+      "datadog": "symbols/icondatadog.svg",
+      "http-logger": "symbols/iconhttp-logger.svg",
+      "skywalking-logger": "img/integrations/skywalking.svg",
+      "tcp-logger": "symbols/icontcp-logger.svg",
+      "kafka-logger": "symbols/iconkafka-logger.svg",
+      "rocketmq-logger": "img/integrations/rocketmq.svg",
+      "udp-logger": "symbols/iconudp-logger.svg",
+      "clickhouse-logger": "img/integrations/clickhouse.svg",
+      "syslog": "symbols/iconsyslog.svg",
+      "log-rotate": "img/plugin/apisix.svg",
+      "error-log-logger": "symbols/iconerror-log-logger.svg",
+      "sls-logger": "symbols/iconsls-logger.svg",
+      "google-cloud-logging": "symbols/icongoogle-cloud-logging.svg",
+      "splunk-hec-logging": "img/integrations/splunk.svg",
+      "file-logger": "img/plugin/apisix.svg",
+      "loggly": "img/plugin/apisix.svg",
+      "loki-logger": "img/integrations/grafana.svg",
+      "elasticsearch-logger": "img/integrations/elasticsearch.svg",
+      "tencent-cloud-cls": "img/plugin/apisix.svg"
+    }
+  },
+  {
+    "name": "Serverless",
+    "color": "#9e165f",
+    "plugins": {
+      "serverless": "img/plugin/apisix.svg",
+      "azure-functions": "img/integrations/azurefunctions.svg",
+      "openwhisk": "img/integrations/openwhisk.svg",
+      "aws-lambda": "img/integrations/awslambda.svg",
+      "workflow": "img/plugin/apisix.svg",
+      "openfunction": "img/integrations/openfunction.svg"
+    }
+  },
+  {
+    "name": "其他协议",
+    "color": "#475467",
+    "plugins": {
+      "dubbo-proxy": "img/integrations/dubbo.svg",
+      "http-dubbo": "img/integrations/dubbo.svg",
+      "mqtt-proxy": "img/integrations/mqtt.svg",
+      "kafka-proxy": "img/integrations/kafka.svg"
+    }
+  },
+  {
+    "name": "通用",
+    "color": "#344054",
+    "plugins": {
+      "batch-requests": "symbols/iconbatch-requests.svg",
+      "redirect": "img/plugin/apisix.svg",
+      "echo": "img/plugin/apisix.svg",
+      "gzip": "img/plugin/apisix.svg",
+      "brotli": "img/integrations/brotli.svg",
+      "real-ip": "img/plugin/apisix.svg",
+      "server-info": "img/plugin/apisix.svg",
+      "inspect": "img/plugin/apisix.svg",
+      "lago": "img/plugin/apisix.svg",
+      "ext-plugin-pre-req": "img/plugin/apisix.svg",
+      "ext-plugin-post-req": "img/plugin/apisix.svg",
+      "ext-plugin-post-resp": "img/plugin/apisix.svg"
+    }
+  }
+]
