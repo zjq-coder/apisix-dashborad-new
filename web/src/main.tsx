@@ -38,6 +38,7 @@ const router = createBrowserRouter([
       { path: 'clusters', element: <Clusters /> },
       { path: 'routes', element: <Resources kind="routes" /> },
       { path: 'routes/new', element: <ResourceEditor kind="routes" /> },
+      { path: 'routes/import', element: <Transfer routeImport /> },
       { path: 'routes/:resourceId/edit', element: <ResourceEditor kind="routes" /> },
       { path: 'upstreams', element: <Resources kind="upstreams" /> },
       { path: 'upstreams/new', element: <ResourceEditor kind="upstreams" /> },

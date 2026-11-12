@@ -18,17 +18,19 @@ type Object map[string]any
 const KeepSecret = "${dashboard:keep-secret}"
 
 type Cluster struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Environment string     `json:"environment"`
-	URL         string     `json:"url"`
-	Description string     `json:"description"`
-	ReadOnly    bool       `json:"read_only"`
-	Version     string     `json:"version"`
-	Status      string     `json:"status"`
-	LastChecked *time.Time `json:"last_checked"`
-	CreatedAt   time.Time  `json:"created_at"`
-	KeyCipher   string     `json:"-"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Environment    string     `json:"environment"`
+	URL            string     `json:"url"`
+	Description    string     `json:"description"`
+	ReadOnly       bool       `json:"read_only"`
+	Version        string     `json:"version"`
+	Status         string     `json:"status"`
+	LastChecked    *time.Time `json:"last_checked"`
+	ProbeLatencyMS *int64     `json:"probe_latency_ms"`
+	ProbeError     string     `json:"probe_error,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	KeyCipher      string     `json:"-"`
 }
 
 type Resource struct {

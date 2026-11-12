@@ -1,0 +1,3812 @@
+{
+  "limit-req": {
+    "overview": [
+      "limit-req 插件使用 漏桶 算法来限制请求的数量并允许节流。"
+    ],
+    "fields": {
+      "route": {
+        "rate": "每秒允许的最大请求数。超过速率且低于突发的请求将被延迟。",
+        "burst": "每秒允许延迟的请求数，以进行节流。超过速率和突发的请求将被拒绝。",
+        "key_type": "key 的类型。如果 key_type 为 var ，则 key 将被解释为变量。如果 key_type 为 var_combination ，则 key 将被解释为变量的组合。",
+        "key": "用于计数请求的 key。如果 key_type 为 var ，则 key 将被解释为变量。变量不需要以美元符号（ $ ）为前缀。如果 key_type 为 var_combination ，则 key 会被解释为变量的组合。所有变量都应该以美元符号（ $ ）为前缀。例如，要配置 key 使用两个请求头 custom-a 和 custom-b 的组合，则 key 应该配置为 $http_custom_a $http_custom_b 。",
+        "rejected_code": "请求因超出阈值而被拒绝时返回的 HTTP 状态代码。",
+        "rejected_msg": "请求因超出阈值而被拒绝时返回的响应主体。",
+        "nodelay": "如果为 true，则不延迟突发阈值内的请求。",
+        "allow_degradation": "如果为 true，则允许 APISIX 在插件或其依赖项不可用时继续处理没有插件的请求。",
+        "policy": "速率限制计数器的策略。如果是 local ，则计数器存储在本地内存中。如果是 redis ，则计数器存储在 Redis 实例上。如果是 redis-cluster ，则计数器存储在 Redis 集群中。",
+        "redis_host": "Redis 节点的地址。当 policy 为 redis 时必填。",
+        "redis_port": "当 policy 为 redis 时，Redis 节点的端口。",
+        "redis_username": "如果使用 Redis ACL，则为 Redis 的用户名。如果使用旧式身份验证方法 requirepass ，则仅配置 redis_password 。当 policy 为 redis 时使用。",
+        "redis_password": "当 policy 为 redis 或 redis-cluster 时，Redis 节点的密码。",
+        "redis_ssl": "如果为 true，则在 policy 为 redis 时使用 SSL 连接到 Redis。",
+        "redis_ssl_verify": "如果为 true，则在 policy 为 redis 时验证服务器 SSL 证书。",
+        "redis_server_name": "当 policy 为 redis 且 redis_ssl 为 true 时使用的 TLS SNI。默认使用 redis_host 。当 redis_ssl_verify 为 true 时，证书还必须与该名称匹配，因此当 redis_host 是证书未覆盖的别名时请设置此项。",
+        "redis_database": "当 policy 为 redis 时，Redis 中的数据库编号。",
+        "redis_timeout": "当 policy 为 redis 或 redis-cluster 时，Redis 超时值（以毫秒为单位）。",
+        "redis_keepalive_timeout": "当 policy 为 redis 或 redis-cluster 时，与 Redis 的空闲连接超时时间，单位为毫秒。",
+        "redis_keepalive_pool": "当 policy 为 redis 或 redis-cluster 时，与 Redis 的连接池最大连接数。",
+        "redis_cluster_nodes": "具有至少一个地址的 Redis 集群节点列表。当 policy 为 redis-cluster 时必填。",
+        "redis_cluster_name": "Redis 集群的名称。当 policy 为 redis-cluster 时必须使用。",
+        "redis_cluster_ssl": "如果为 true ，当 policy 为 redis-cluster 时，使用 SSL 连接 Redis 集群。",
+        "redis_cluster_ssl_verify": "如果为 true ，当 policy 为 redis-cluster 时，验证服务器 SSL 证书。"
+      }
+    },
+    "examples": [
+      {
+        "title": "按远程地址应用速率限制",
+        "anchor": "按远程地址应用速率限制"
+      },
+      {
+        "title": "实现 API 节流",
+        "anchor": "实现-api-节流"
+      },
+      {
+        "title": "按远程地址和消费者名称应用速率限制",
+        "anchor": "按远程地址和消费者名称应用速率限制"
+      }
+    ]
+  },
+  "limit-conn": {
+    "overview": [
+      "limit-conn 插件通过并发连接数来限制请求速率。超过阈值的请求将根据配置被延迟或拒绝，从而确保可控的资源使用并防止过载。"
+    ],
+    "fields": {
+      "route": {
+        "conn": "允许的最大并发请求数。超过配置的限制且低于 conn + burst 的请求将被延迟。如果未配置 rules ，则为必填项。",
+        "burst": "允许延迟的过多并发请求数。超过 conn + burst 的请求将被立即拒绝。如果未配置 rules ，则为必填项。",
+        "default_conn_delay": "允许超过 conn 且不超过 conn + burst 的并发请求的处理延迟（秒），可根据 only_use_default_delay 设置动态调整。",
+        "only_use_default_delay": "如果为 false，则根据请求超出 conn 限制的程度按比例延迟请求。拥塞越严重，延迟就越大。例如，当 conn 为 5 、 burst 为 3 且 default_conn_delay 为 1 时，6 个并发请求将导致 1 秒的延迟，7 个请求将导致 2 秒的延迟，8 个请求将导致 3 秒的延迟，依此类推，直到达到 conn + burst 的总限制，超过此限制的请求将被拒绝。如果为 true，则使用 default_conn_delay 延迟 burst 范围内的所有超额请求。超出 conn + burst 的请求将被立即拒绝。例如，当 conn 为 5 、 burst 为 3 且 default_conn_delay 为 1 时，6、7 或 8 个并发请求都将延迟 1 秒。",
+        "key_type": "key 的类型。如果 key_type 为 var ，则 key 将被解释为变量。如果 key_type 为 var_combination ，则 key 将被解释为变量的组合。",
+        "key": "用于计数请求的 key。如果 key_type 为 var ，则 key 将被解释为变量。变量不需要以美元符号（ $ ）为前缀。如果 key_type 为 var_combination ，则 key 会被解释为变量的组合。所有变量都应该以美元符号（ $ ）为前缀。例如，要配置 key 使用两个请求头 custom-a 和 custom-b 的组合，则 key 应该配置为 $http_custom_a $http_custom_b 。如果未配置 rules ，则为必填项。",
+        "rejected_code": "请求因超出阈值而被拒绝时返回的 HTTP 状态码。",
+        "rejected_msg": "请求因超出阈值而被拒绝时返回的响应主体。",
+        "allow_degradation": "如果为 true，则允许 APISIX 在插件或其依赖项不可用时继续处理没有插件的请求。",
+        "policy": "速率限制计数器的策略。如果是 local ，则计数器存储在本地内存中。如果是 redis ，则计数器存储在 Redis 实例上。如果是 redis-cluster ，则计数器存储在 Redis 集群中。",
+        "redis_host": "Redis 节点的地址。当 policy 为 redis 时必填。",
+        "redis_port": "当 policy 为 redis 时，Redis 节点的端口。",
+        "redis_username": "如果使用 Redis ACL，则为 Redis 的用户名。如果使用旧式身份验证方法 requirepass ，则仅配置 redis_password 。当 policy 为 redis 时使用。",
+        "redis_password": "当 policy 为 redis 或 redis-cluster 时，Redis 节点的密码。",
+        "redis_ssl": "如果为 true，则在 policy 为 redis 时使用 SSL 连接到 Redis。",
+        "redis_ssl_verify": "如果为 true，则在 policy 为 redis 时验证服务器 SSL 证书。",
+        "redis_server_name": "当 policy 为 redis 且 redis_ssl 为 true 时使用的 TLS SNI。默认使用 redis_host 。当 redis_ssl_verify 为 true 时，证书还必须与该名称匹配，因此当 redis_host 是证书未覆盖的别名时请设置此项。",
+        "redis_database": "当 policy 为 redis 时，Redis 中的数据库编号。",
+        "redis_timeout": "当 policy 为 redis 或 redis-cluster 时，Redis 超时值（以毫秒为单位）。",
+        "redis_keepalive_timeout": "当 policy 为 redis 或 redis-cluster 时，Redis 的空闲连接超时时间（以毫秒为单位）。",
+        "redis_keepalive_pool": "当 policy 为 redis 或 redis-cluster 时，Redis 的连接池最大连接数。",
+        "key_ttl": "Redis 键的 TTL（以秒为单位）。当 policy 为 redis 或 redis-cluster 时使用。",
+        "redis_cluster_nodes": "至少包含一个地址的 Redis 集群节点列表。当 policy 为 redis-cluster 时必填。",
+        "redis_cluster_name": "Redis 集群的名称。当 policy 为 redis-cluster 时必填。",
+        "redis_cluster_ssl": "如果为 true，则在 policy 为 redis-cluster 时使用 SSL 连接到 Redis 集群。",
+        "redis_cluster_ssl_verify": "如果为 true，则在 policy 为 redis-cluster 时验证服务器 SSL 证书。",
+        "rules": "按顺序应用的速率限制规则数组。从 APISIX 3.16.0 起可用。你应配置以下参数集之一，但不能同时配置两者： conn 、 burst 、 default_conn_delay 、 key 或 rules 、 default_conn_delay 。",
+        "rules.conn": "允许的最大并发请求数。超过配置的限制且低于 conn + burst 的请求将被延迟。该参数也支持 string 数据类型，并允许使用以美元符号（ $ ）为前缀的内置变量。",
+        "rules.burst": "允许延迟的过多并发请求数。超过 conn + burst 的请求将被立即拒绝。该参数也支持 string 数据类型，并允许使用以美元符号（ $ ）为前缀的内置变量。",
+        "rules.key": "用于计数请求的键。如果配置的键不存在，则不会执行该规则。 key 被解释为变量的组合。所有变量都应以美元符号（ $ ）为前缀。"
+      }
+    },
+    "examples": [
+      {
+        "title": "通过远程地址应用速率限制",
+        "anchor": "通过远程地址应用速率限制"
+      },
+      {
+        "title": "通过远程地址和消费者名称应用速率限制",
+        "anchor": "通过远程地址和消费者名称应用速率限制"
+      },
+      {
+        "title": "限制 WebSocket 连接速率",
+        "anchor": "限制-websocket-连接速率"
+      },
+      {
+        "title": "使用 Redis 服务器在 APISIX 节点之间共享配额",
+        "anchor": "使用-redis-服务器在-apisix-节点之间共享配额"
+      },
+      {
+        "title": "使用 Redis 集群在 APISIX 节点之间共享配额",
+        "anchor": "使用-redis-集群在-apisix-节点之间共享配额"
+      },
+      {
+        "title": "按规则进行速率限制",
+        "anchor": "按规则进行速率限制"
+      }
+    ]
+  },
+  "limit-count": {
+    "overview": [
+      "limit-count 插件使用固定窗口或滑动窗口算法，通过给定时间间隔内的请求数量来限制请求速率。超过配置配额的请求将被拒绝。",
+      "使用默认响应标头名称时，在单限流模式下将 show_limit_quota_header 设置为 true ，响应中会包含以下速率限制标头："
+    ],
+    "fields": {
+      "route": {
+        "count": "time_window 内允许的最大请求数。未配置 rules 时，必须与 time_window 一起配置；请勿与 rules 同时配置。字符串可以是数值，也可以通过 $ 前缀引用 APISIX 或 NGINX 变量。解析结果必须是小于或等于 9007199254740991 的正整数，否则 APISIX 返回 500 Internal Server Error ； allow_degradation 为 true 时除外。APISIX 3.16.0 及后续版本支持字符串值，APISIX 3.18.0 及后续版本支持运行时校验。",
+        "time_window": "count 对应的时间间隔，单位为秒。未配置 rules 时，必须与 count 一起配置；请勿与 rules 同时配置。字符串可以是数值，也可以通过 $ 前缀引用 APISIX 或 NGINX 变量。解析结果必须是小于或等于 9007199254740991 的正整数，否则 APISIX 返回 500 Internal Server Error ； allow_degradation 为 true 时除外。APISIX 3.16.0 及后续版本支持字符串值，APISIX 3.18.0 及后续版本支持运行时校验。",
+        "window_type": "限流窗口算法。 fixed 对每个时间窗口独立执行配额； sliding 在计算当前计数时对上一个窗口加权，从而平滑窗口边界处的突发流量。APISIX 3.18.0 及后续版本支持 sliding 。",
+        "rules": "按顺序执行的限流规则。请勿将 rules 与顶层的 count 、 time_window 或 group 同时配置；顶层 key 和 key_type 在规则模式下不生效。每条规则必须使用唯一的 key 。如果请求中无法解析规则的键表达式，则跳过该规则。",
+        "rules.count": "规则的 time_window 内允许的最大请求数。字符串可以是数值，也可以通过 $ 前缀引用 APISIX 或 NGINX 变量。解析结果必须是小于或等于 9007199254740991 的正整数，否则 APISIX 返回 500 Internal Server Error ； allow_degradation 为 true 时除外。",
+        "rules.time_window": "规则中 count 对应的时间间隔，单位为秒。字符串可以是数值，也可以通过 $ 前缀引用 APISIX 或 NGINX 变量。解析结果必须是小于或等于 9007199254740991 的正整数，否则 APISIX 返回 500 Internal Server Error ； allow_degradation 为 true 时除外。",
+        "rules.key": "用作该规则计数键的变量表达式。每个 APISIX 或 NGINX 变量都必须带 $ 前缀，例如 $remote_addr 或 $remote_addr $http_x_tenant 。顶层 key_type 不适用。如果该键表达式无法从请求中解析出任何变量，则跳过该规则。",
+        "rules.header_prefix": "插入该规则配额标头中 RateLimit- 之前的前缀。例如， foo 会生成 X-foo-RateLimit-Limit 、 X-foo-RateLimit-Remaining 和 X-foo-RateLimit-Reset 。如果省略，则使用从 1 开始的规则索引，因此第一条规则会生成 X-1-RateLimit-* 。仅当 show_limit_quota_header 为 true 时发送。",
+        "key_type": "key 的类型。如果 key_type 为 var ，则 key 将被解释为变量。如果 key_type 为 var_combination ，则 key 将被解释为变量的组合。如果 key_type 为 constant ，则 key 将被解释为常量。",
+        "key": "用于计数请求的 key。如果 key_type 为 var ，则 key 将被解释为变量。变量不需要以美元符号（ $ ）为前缀。如果 key_type 为 var_combination ，则 key 会被解释为变量的组合。所有变量都应该以美元符号 ( $ ) 为前缀。如果 key_type 为 constant ，则 key 会被解释为常量值。",
+        "rejected_code": "请求因超出阈值而被拒绝时返回的 HTTP 状态代码。",
+        "rejected_msg": "请求因超出阈值而被拒绝时返回的响应主体。",
+        "policy": "速率限制计数器的策略。如果是 local ，则计数器存储在本地内存中。如果是 redis ，则计数器存储在 Redis 实例上。如果是 redis-cluster ，则计数器存储在 Redis 集群中。如果是 redis-sentinel ，则计数器存储在通过 Sentinel 发现的 Redis 主节点上。",
+        "allow_degradation": "如果为 true ，当计数器后端发生故障，或通过变量解析的 count 或 time_window 无效时，APISIX 会继续处理请求但不执行限流。如果为 false ，这些故障会返回 500 Internal Server Error 。",
+        "show_limit_quota_header": "如果为 true ，则在响应中包含配额标头。使用默认插件元数据时，单限流模式使用 X-RateLimit-Limit 、 X-RateLimit-Remaining 和 X-RateLimit-Reset 。在 rules 模式下，每条规则都会输出 rules.header_prefix 中说明的带前缀标头。",
+        "sync_interval": "Redis 类策略的延迟同步间隔，单位为秒。设置为 -1 时，每个请求都会直接同步。如果顶层动态 time_window 或 rules.time_window 的解析值小于或等于 sync_interval ，APISIX 会对该请求回退为直接同步。APISIX 3.18.0 及后续版本支持延迟同步。",
+        "group": "插件的 group ID，以便同一 group 的路由可以共享相同的速率限制计数器。",
+        "redis_host": "Redis 节点的地址。当 policy 为 redis 时必填。",
+        "redis_port": "当 policy 为 redis 时，Redis 节点的端口。",
+        "redis_username": "如果使用 Redis ACL，则为 Redis 的用户名。如果使用旧式身份验证方法 requirepass ，则仅配置 redis_password 。当 policy 为 redis 或 redis-sentinel 时使用。",
+        "redis_password": "当 policy 为 redis 、 redis-cluster 或 redis-sentinel 时，Redis 节点的密码。",
+        "redis_ssl": "如果为 true，则在 policy 为 redis 时使用 SSL 连接 Redis。",
+        "redis_ssl_verify": "如果为 true，则在 policy 为 redis 时验证服务器 SSL 证书。",
+        "redis_server_name": "当 policy 为 redis 且 redis_ssl 为 true 时使用的 TLS SNI。默认使用 redis_host 。当 redis_ssl_verify 为 true 时，证书还必须与该名称匹配，因此当 redis_host 是证书未覆盖的别名时请设置此项。",
+        "redis_database": "当 policy 为 redis 或 redis-sentinel 时，Redis 中的数据库编号。",
+        "redis_timeout": "当 policy 为 redis 或 redis-cluster 时，Redis 超时值（以毫秒为单位）。",
+        "redis_keepalive_timeout": "Redis 空闲连接超时时间，单位为毫秒。",
+        "redis_keepalive_pool": "当 policy 为 redis 或 redis-cluster 时，与 Redis 的连接池最大连接数。",
+        "redis_cluster_nodes": "具有至少一个地址的 Redis 集群节点列表。当 policy 为 redis-cluster 时必填。",
+        "redis_cluster_name": "Redis 集群的名称。当 policy 为 redis-cluster 时必填。",
+        "redis_cluster_ssl": "如果为 true ，当 policy 为 redis-cluster 时，使用 SSL 连接 Redis 集群。",
+        "redis_cluster_ssl_verify": "如果为 true ，当 policy 为 redis-cluster 时，验证服务器 SSL 证书。",
+        "redis_sentinels": "Sentinel 节点列表。当 policy 为 redis-sentinel 时必填。每一项都必须包含 host 和 port 。",
+        "redis_master_name": "Sentinel 监控的 Redis 主节点名称。当 policy 为 redis-sentinel 时必填。",
+        "redis_role": "通过 Sentinel 选择的 Redis 角色。",
+        "redis_connect_timeout": "当 policy 为 redis-sentinel 时，Redis 连接超时值（毫秒）。",
+        "redis_read_timeout": "当 policy 为 redis-sentinel 时，Redis 读取超时值（毫秒）。",
+        "sentinel_username": "如果启用了 Sentinel ACL，则为 Sentinel 用户名。",
+        "sentinel_password": "如果启用了 Sentinel ACL，则为 Sentinel 密码。"
+      }
+    },
+    "examples": [
+      {
+        "title": "按远程地址应用速率限制",
+        "anchor": "按远程地址应用速率限制"
+      },
+      {
+        "title": "通过远程地址和消费者名称应用速率限制",
+        "anchor": "通过远程地址和消费者名称应用速率限制"
+      },
+      {
+        "title": "在路由之间共享配额",
+        "anchor": "在路由之间共享配额"
+      },
+      {
+        "title": "使用 Redis 服务器在 APISIX 节点之间共享配额",
+        "anchor": "使用-redis-服务器在-apisix-节点之间共享配额"
+      },
+      {
+        "title": "使用 Redis 集群在 APISIX 节点之间共享配额",
+        "anchor": "使用-redis-集群在-apisix-节点之间共享配额"
+      },
+      {
+        "title": "使用 Redis Sentinel 在 APISIX 节点之间共享配额",
+        "anchor": "使用-redis-sentinel-在-apisix-节点之间共享配额"
+      },
+      {
+        "title": "应用滑动窗口速率限制",
+        "anchor": "应用滑动窗口速率限制"
+      },
+      {
+        "title": "通过延迟同步减少 Redis 往返",
+        "anchor": "通过延迟同步减少-redis-往返"
+      },
+      {
+        "title": "使用匿名消费者进行速率限制",
+        "anchor": "使用匿名消费者进行速率限制"
+      },
+      {
+        "title": "自定义速率限制标头",
+        "anchor": "自定义速率限制标头"
+      }
+    ]
+  },
+  "proxy-cache": {
+    "overview": [
+      "proxy-cache 插件提供了根据缓存键缓存响应的功能。该插​​件支持基于磁盘和基于内存的缓存选项，用于缓存 GET 、 POST 和 HEAD 请求。",
+      "可以根据请求 HTTP 方法、响应状态代码、请求标头值等有条件地缓存响应。"
+    ],
+    "fields": {
+      "route": {
+        "cache_strategy": "缓存策略。缓存在磁盘还是内存中。",
+        "cache_zone": "与缓存策略一起使用的缓存区域。该值应与 配置文件 中定义的缓存区域之一匹配，并与缓存策略相对应。例如，当使用内存缓存策略时，应该使用内存缓存区域。",
+        "cache_key": "用于缓存的键。支持 NGINX 变量 和值中的常量字符串。变量应该以 $ 符号为前缀。",
+        "cache_bypass": "一个或多个用于解析值的参数，如果任何值不为空且不等于 0 ，则不会从缓存中检索响应。支持值中的 NGINX 变量 和常量字符串。变量应该以 $ 符号为前缀。",
+        "cache_method": "应缓存响应的请求方法。",
+        "cache_http_status": "应缓存响应的响应 HTTP 状态代码。",
+        "hide_cache_headers": "如果为 true，则隐藏 Expires 和 Cache-Control 响应标头。",
+        "cache_control": "如果为 true，则遵守 HTTP 规范中的 Cache-Control 行为。仅对内存中策略有效。",
+        "no_cache": "用于解析值的一个或多个参数，如果任何值不为空且不等于 0 ，则不会缓存响应。支持 NGINX 变量 和值中的常量字符串。变量应以 $ 符号为前缀。",
+        "cache_ttl": "在内存中缓存时的缓存生存时间 (TTL)，以秒为单位。要调整在磁盘上缓存时的 TTL，请更新 配置文件 中的 cache_ttl 。TTL 值与从上游服务收到的响应标头 Cache-Control 和 Expires 中的值一起评估。",
+        "consumer_isolation": "如果为 true，按已认证身份对缓存进行分区。当请求解析为 APISIX 消费者（ ctx.consumer_name ）或携带 remote user（ ctx.var.remote_user ）时，身份会被作为前缀加入有效的缓存键，使每个消费者拥有独立的缓存命名空间。当 cache_key 已包含身份相关变量（ $consumer_name 、 $consumer_group_id 、 $remote_user 或 $http_authorization ）时此选项不生效。如果希望不同消费者共享缓存（例如上游响应与请求方无关的路由），可设置为 false 。",
+        "cache_set_cookie": "如果为 true，缓存包含 Set-Cookie 响应头的响应。默认关闭，因为 Set-Cookie 是面向特定接收方的，不适合放入共享缓存。仅对内存缓存策略有效——磁盘缓存策略由 NGINX 原生 proxy_cache 处理，对带 Set-Cookie 的响应始终不缓存，且不受此选项影响。仅当上游的 Set-Cookie 与具体用户无关（例如 A/B 测试变体 cookie）时才启用。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在磁盘上缓存数据",
+        "anchor": "在磁盘上缓存数据"
+      },
+      {
+        "title": "在内存中缓存数据",
+        "anchor": "在内存中缓存数据"
+      },
+      {
+        "title": "有条件地缓存响应",
+        "anchor": "有条件地缓存响应"
+      },
+      {
+        "title": "有条件地从缓存中检索响应",
+        "anchor": "有条件地从缓存中检索响应"
+      },
+      {
+        "title": "缓存 502 和 504 错误响应代码",
+        "anchor": "缓存-502-和-504-错误响应代码"
+      }
+    ]
+  },
+  "request-validation": {
+    "overview": [
+      "request-validation 插件会在将请求转发到上游服务之前对其进行验证。此插件使用 JSON Schema 进行验证，并且可以验证请求的标头和正文。",
+      "请参阅 JSON Schema 规范 了解有关语法的更多信息。"
+    ],
+    "fields": {
+      "route": {
+        "header_schema": "header 数据的 schema 数据结构。",
+        "body_schema": "body 数据的 schema 数据结构。",
+        "rejected_code": "当请求被拒绝时要返回的状态码。",
+        "rejected_msg": "当请求被拒绝时返回的信息。"
+      }
+    },
+    "examples": [
+      {
+        "title": "验证请求标头",
+        "anchor": "验证请求标头"
+      },
+      {
+        "title": "自定义拒绝消息和状态代码",
+        "anchor": "自定义拒绝消息和状态代码"
+      },
+      {
+        "title": "验证请求主体",
+        "anchor": "验证请求主体"
+      }
+    ]
+  },
+  "proxy-mirror": {
+    "overview": [
+      "proxy-mirror 插件将传入流量复制到 APISIX 并将其转发到指定的上游，而不会中断常规服务。您可以将插件配置为镜像所有流量或仅镜像一部分流量。该机制有利于一些用例，包括故障排除、安全检查、分析等。",
+      "请注意，APISIX 会忽略接收镜像流量的上游主机的任何响应。"
+    ],
+    "fields": {
+      "route": {
+        "host": "将镜像流量转发到的主机的地址。该地址应包含方案但不包含路径，例如 http://127.0.0.1:8081 。",
+        "path": "将镜像流量转发到的主机的路径。如果未指定，则默认为路由的当前 URI 路径。如果插件正在镜像 gRPC 流量，则不适用。",
+        "path_concat_mode": "指定 path 时的连接模式。设置为 replace 时，配置的 path 将直接用作将镜像流量转发到的主机的路径。设置为 prefix 时，转发到的路径将是配置的 path ，附加路由的请求 URI 路径。如果插件正在镜像 gRPC 流量，则不适用。",
+        "sample_ratio": "将被镜像的请求的比例。默认情况下，所有流量都会被镜像。"
+      }
+    },
+    "examples": [
+      {
+        "title": "镜像部分流量",
+        "anchor": "镜像部分流量"
+      },
+      {
+        "title": "配置镜像超时",
+        "anchor": "配置镜像超时"
+      }
+    ]
+  },
+  "api-breaker": {
+    "overview": [
+      "api-breaker 插件实现了 API 熔断功能，从而帮助我们保护上游业务服务。",
+      "注意"
+    ],
+    "fields": {
+      "route": {
+        "break_response_code": "当上游服务处于不健康状态时返回的 HTTP 错误码。",
+        "break_response_body": "当上游服务处于不健康状态时返回的 HTTP 响应体信息。",
+        "break_response_headers": "当上游服务处于不健康状态时返回的 HTTP 响应头信息。该字段仅在配置了 break_response_body 属性时生效，并能够以 $var 的格式包含 APISIX 变量，比如 {\"key\":\"X-Client-Addr\",\"value\":\"$remote_addr:$remote_port\"} 。",
+        "max_breaker_sec": "上游服务熔断的最大持续时间，以秒为单位。",
+        "unhealthy.http_statuses": "上游服务处于不健康状态时的 HTTP 状态码。",
+        "unhealthy.failures": "上游服务在一定时间内触发不健康状态的异常请求次数。",
+        "healthy.http_statuses": "上游服务处于健康状态时的 HTTP 状态码。",
+        "healthy.successes": "上游服务触发健康状态的连续正常请求次数。"
+      }
+    },
+    "examples": []
+  },
+  "traffic-split": {
+    "overview": [
+      "traffic-split 插件根据条件和/或权重将流量引导至各种上游服务。它提供了一种动态且灵活的方法来实施发布策略和管理流量。",
+      "注意"
+    ],
+    "fields": {
+      "route": {
+        "rules.match": "要执行的一对或多对匹配条件和操作的数组。",
+        "rules.match.vars": "以 lua-resty-expr 形式包含一个或多个匹配条件的数组，用于有条件地执行插件。",
+        "rules.weighted_upstreams": "上游配置列表。",
+        "rules.weighted_upstreams.upstream_id": "配置的上游对象的 ID。",
+        "rules.weighted_upstreams.weight": "每个上游的权重。",
+        "rules.weighted_upstreams.upstream": "上游配置。此处不支持某些上游配置选项。这些字段为 service_name 、 discovery_type 、 checks 、 retries 、 retry_timeout 、 desc 和 labels 。作为解决方法，你可以创建一个上游对象并在 upstream_id 中配置它。",
+        "rules.weighted_upstreams.upstream.type": "流量分割算法。 roundrobin 用于加权循环， chash 用于一致性哈希， ewma 用于指数加权移动平均， least_conn 用于最少连接。",
+        "rules.weighted_upstreams.upstream.hash_on": "当 type 为 chash 时使用。支持对 NGINX 变量 、headers、cookie、Consumer 或 NGINX 变量 的组合进行哈希处理。",
+        "rules.weighted_upstreams.upstream.key": "当 type 为 chash 时使用。当 hash_on 设置为 header 或 cookie 时，需要 key 。当 hash_on 设置为 consumer 时，不需要 key ，因为消费者名称将自动用作密钥。",
+        "rules.weighted_upstreams.upstream.nodes": "上游节点的地址。",
+        "rules.weighted_upstreams.upstream.timeout": "连接、发送和接收消息的超时时间（秒）。",
+        "rules.weighted_upstreams.upstream.pass_host": "决定如何传递主机名的模式。 pass 将客户端的主机名传递给上游。 node 传递上游节点中配置的主机。 rewrite 传递 upstream_host 中配置的值。",
+        "rules.weighted_upstreams.upstream.name": "用于指定服务名称、使用场景等的上游标识符。",
+        "rules.weighted_upstreams.upstream.upstream_host": "当 pass_host 为 rewrite 时使用。上游的主机名。"
+      }
+    },
+    "examples": [
+      {
+        "title": "实现 Canary 发布",
+        "anchor": "实现-canary-发布"
+      },
+      {
+        "title": "实现蓝绿部署",
+        "anchor": "实现蓝绿部署"
+      },
+      {
+        "title": "使用 APISIX 表达式定义 POST 请求的匹配条件",
+        "anchor": "使用-apisix-表达式定义-post-请求的匹配条件"
+      },
+      {
+        "title": "使用 APISIX 表达式定义 AND 匹配条件",
+        "anchor": "使用-apisix-表达式定义-and-匹配条件"
+      },
+      {
+        "title": "使用 APISIX 表达式定义或匹配条件",
+        "anchor": "使用-apisix-表达式定义或匹配条件"
+      },
+      {
+        "title": "为不同的上游配置不同的规则",
+        "anchor": "为不同的上游配置不同的规则"
+      }
+    ]
+  },
+  "request-id": {
+    "overview": [
+      "request-id 插件为每个通过网关代理的请求分配一个唯一 ID，可用于请求跟踪和调试。如果请求在由 header_name 指定的请求头中已包含一个 ID 且其值不为空（\"\"），插件将使用该值作为请求 ID；否则，将生成一个新的 ID，并且不会覆盖已有的有效 ID。",
+      "请求 ID 默认包含在网关日志中。当插件启用时，它还会被添加到响应标头中。"
+    ],
+    "fields": {
+      "route": {
+        "header_name": "携带请求唯一 ID 的标头的名称。请注意，如果请求在 header_name 标头中携带 ID，则插件将使用标头值作为唯一 ID，并且不会用生成的 ID 覆盖它。",
+        "include_in_response": "如果为 true，则将生成的请求 ID 包含在响应标头中，其中标头的名称是 header_name 值。",
+        "algorithm": "用于生成唯一 ID 的算法。设置为 uuid 时，插件会生成一个通用唯一标识符。设置为 nanoid 时，插件会生成一个紧凑的、URL 安全的 ID。设置为 range_id 时，插件会生成具有特定参数的连续 ID。设置为 ksuid 时，插件会生成具有时间戳和随机值的连续 ID。",
+        "range_id": "使用 range_id 算法生成请求 ID 的配置。",
+        "range_id.char_set": "用于 range_id 算法的字符集。",
+        "range_id.length": "用于 range_id 算法的生成的 ID 的长度。"
+      }
+    },
+    "examples": [
+      {
+        "title": "理解网关日志中的请求 ID",
+        "anchor": "理解网关日志中的请求-id"
+      },
+      {
+        "title": "将请求 ID 附加到默认响应标头",
+        "anchor": "将请求-id-附加到默认响应标头"
+      },
+      {
+        "title": "将请求 ID 附加到自定义响应标头",
+        "anchor": "将请求-id-附加到自定义响应标头"
+      },
+      {
+        "title": "在响应标头中隐藏请求 ID",
+        "anchor": "在响应标头中隐藏请求-id"
+      },
+      {
+        "title": "使用nanoid算法",
+        "anchor": "使用-nanoid-算法"
+      },
+      {
+        "title": "使用ksuid算法",
+        "anchor": "使用-ksuid-算法"
+      },
+      {
+        "title": "全局和在路由上附加请求 ID",
+        "anchor": "全局和在路由上附加请求-id"
+      }
+    ]
+  },
+  "attach-consumer-label": {
+    "overview": [
+      "attach-consumer-label 插件在 X-Consumer-Username 和 X-Credential-Identifier 之外，还将自定义的消费者相关标签附加到经过身份验证的请求，以便上游服务区分消费者并实现额外的业务逻辑。"
+    ],
+    "fields": {
+      "route": {
+        "headers": "要附加到请求标头的消费者标签键值对，其中键是请求标头名称（例如 X-Consumer-Role ），值是对消费者标签键的引用（例如 $role ）。注意，值必须以美元符号（ $ ）开头。客户端传入的同名请求标头会被先行移除，因此上游只会看到网关设置的值。如果消费者上未配置被引用的标签，则对应的请求标头将不会被附加。"
+      }
+    },
+    "examples": [
+      {
+        "title": "附加消费者标签",
+        "anchor": "附加消费者标签"
+      }
+    ]
+  },
+  "proxy-control": {
+    "overview": [
+      "使用 proxy-control 插件能够动态地控制 NGINX 代理的相关行为。",
+      "重要"
+    ],
+    "fields": {
+      "route": {
+        "request_buffering": "如果设置为 true ，插件将动态设置 proxy_request_buffering 。"
+      }
+    },
+    "examples": []
+  },
+  "client-control": {
+    "overview": [
+      "client-control 插件能够通过设置客户端请求体大小的上限来动态地控制 NGINX 处理客户端的请求。",
+      "重要"
+    ],
+    "fields": {
+      "route": {
+        "max_body_size": "设置客户端请求体的最大上限，动态调整 client_max_body_size 的大小，单位为字节。当设置 max_body_size 为 0 时，将不会对客户端请求体大小进行检查。"
+      }
+    },
+    "examples": []
+  },
+  "traffic-label": {
+    "overview": [
+      "traffic-label 插件根据可配置的匹配规则为请求设置头部信息。与 workflow 插件类似，该插件按顺序对规则进行求值，并对第一个匹配的规则执行动作。两者的关键区别在于： traffic-label 支持在每条规则的动作列表中设置 权重分发 ，从而实现按比例的流量染色，适用于灰度发布和 A/B 测试场景。",
+      "每条规则由以下两部分组成："
+    ],
+    "fields": {
+      "route": {
+        "rules": "匹配规则列表，按数组顺序求值，第一个命中的规则生效。",
+        "rules[].match": "使用 lua-resty-expr 语法定义的匹配条件。每个元素为表达式数组 [变量, 运算符, 值] ，或字符串 \"OR\" / \"AND\" 用于控制逻辑分组。省略时匹配所有请求。",
+        "rules[].actions": "规则命中时要执行的动作数组。流量按各动作的 weight 进行分发。",
+        "rules[].actions[].set_headers": "要设置的请求头。已存在同名头部时覆盖，不存在时新增。值支持 NGINX 变量，如 $remote_addr 。格式： {\"头部名称\": \"值\"} 。",
+        "rules[].actions[].weight": "该动作的相对权重。流量占比 = 该动作权重 / 规则中所有动作权重之和。仅设置 weight 而不配置其他动作，表示该比例的流量不做任何修改直接通过。"
+      }
+    },
+    "examples": [
+      {
+        "title": "按请求条件为流量打标签",
+        "anchor": "按请求条件为流量打标签"
+      },
+      {
+        "title": "按权重将流量分发到不同动作",
+        "anchor": "按权重将流量分发到不同动作"
+      }
+    ]
+  },
+  "response-rewrite": {
+    "overview": [
+      "response-rewrite 插件提供了重写 APISIX 及其上游服务返回给客户端的响应的选项。使用此插件，你可以修改 HTTP 状态代码、请求标头、响应正文等。",
+      "例如，你可以使用此插件来："
+    ],
+    "fields": {
+      "route": {
+        "status_code": "修改上游返回状态码，默认保留原始响应代码。",
+        "body": "修改上游返回的 body 内容，如果设置了新内容，header 里面的 Content-Length 字段也会被去掉。",
+        "body_base64": "如果为 true，则在发送到客户端之前解码 body 中配置的响应主体，这对于图像和 protobuf 解码很有用。请注意，此配置不能用于解码上游响应。",
+        "headers": "按照 add 、 remove 和 set 的顺序执行的操作。",
+        "headers.add": "要附加到请求的标头。如果请求中已经存在标头，则会附加标头值。标头值可以设置为常量，也可以设置为一个或多个 Nginx 变量 。",
+        "headers.set": "要设置到请求的标头。如果请求中已经存在标头，则会覆盖标头值。标头值可以设置为常量，也可以设置为一个或多个 Nginx 变量 。",
+        "headers.remove": "要从请求中删除的标头。",
+        "vars": "以 lua-resty-expr 的形式包含一个或多个匹配条件的数组，用于有条件地执行插件。",
+        "filters": "通过将一个指定字符串替换为另一个指定字符串来修改响应主体的过滤器列表。不应与 body 一起配置。",
+        "filters.regex": "用于匹配响应主体的 RegEx 模式。",
+        "filters.scope": "替换范围。 once 替换第一个匹配的实例， global 全局替换。",
+        "filters.replace": "要替换的内容。",
+        "filters.options": "用于控制如何执行匹配操作的 RegEx 选项。请参阅 Lua NGINX 模块 以了解可用选项。"
+      }
+    },
+    "examples": [
+      {
+        "title": "重写标头和正文",
+        "anchor": "重写标头和正文"
+      },
+      {
+        "title": "使用 RegEx 过滤器重写标头",
+        "anchor": "使用-regex-过滤器重写标头"
+      },
+      {
+        "title": "从 Base64 解码正文",
+        "anchor": "从-base64-解码正文"
+      },
+      {
+        "title": "重写响应及其与执行阶段的联系",
+        "anchor": "重写响应及其与执行阶段的联系"
+      }
+    ]
+  },
+  "proxy-rewrite": {
+    "overview": [
+      "proxy-rewrite 插件支持重写 APISIX 转发到上游服务的请求。使用此插件，你可以修改 HTTP 方法、请求目标上游地址、请求标头等。"
+    ],
+    "fields": {
+      "route": {
+        "uri": "新的上游 URI 路径。值支持 NGINX 变量 。例如， $arg_name 。",
+        "method": "要使用的重写请求的 HTTP 方法。",
+        "regex_uri": "用于匹配客户端请求 URI 路径并生成新的上游 URI 路径的正则表达式。当同时配置 uri 和 regex_uri 时， uri 的优先级更高。请在一个扁平数组中提供一个或多个“匹配模式 - 替换值”配对。插件按顺序检查各配对，并应用第一个匹配项。例如，配置 [\"^/test/(.*)/(.*)\", \"/$1-$2\", \"^/other/(.*)\", \"/other\"] 后，发送到 /test/user/agent 的请求会被重写为 /user-agent ，发送到 /other/hello 的请求会被重写为 /other 。",
+        "host": "设置 Host 请求标头。",
+        "headers": "要执行的标头操作。可以设置为动作动词 add 、 remove 和/或 set 的对象；或由要 set 的标头组成的对象。当配置了多个动作动词时，动作将按照“添加”、“删除”和“设置”的顺序执行。",
+        "headers.add": "要附加到请求的标头。如果请求中已经存在该标头，插件会追加配置值。值可以是常量、一个或多个 NGINX 变量 ，或者 $1-$2-$3 等 regex_uri 捕获结果。值也可以是数组；插件会分别解析每个元素，并按数组顺序将其追加为单独的标头行。APISIX 3.18.0 及后续版本支持数组值。",
+        "headers.set": "要在请求中设置的标头。如果请求中已经存在该标头，插件会覆盖原有值。值可以是常量、一个或多个 NGINX 变量 ，或者 $1-$2-$3 等 regex_uri 捕获结果。值也可以是数组；插件会分别解析每个元素，并用按数组顺序生成的多个标头行替换原有值。APISIX 3.18.0 及后续版本支持数组值。请勿使用此字段设置 Host 。",
+        "headers.remove": "从请求中删除的标头。",
+        "use_real_request_uri_unsafe": "如果为 True，则绕过 URI 规范化并允许完整的原始请求 URI。启用此选项被视为不安全。"
+      }
+    },
+    "examples": [
+      {
+        "title": "重写主机标头",
+        "anchor": "重写主机标头"
+      },
+      {
+        "title": "重写 URI 并设置标头",
+        "anchor": "重写-uri-并设置标头"
+      },
+      {
+        "title": "重写 URI 并附加标头",
+        "anchor": "重写-uri-并附加标头"
+      },
+      {
+        "title": "删除现有标头",
+        "anchor": "删除现有标头"
+      },
+      {
+        "title": "使用 RegEx 重写 URI",
+        "anchor": "使用-regex-重写-uri"
+      },
+      {
+        "title": "添加 URL 参数",
+        "anchor": "添加-url-参数"
+      },
+      {
+        "title": "重写 HTTP 方法",
+        "anchor": "重写-http-方法"
+      },
+      {
+        "title": "将消费者名称转发到上游",
+        "anchor": "将消费者名称转发到上游"
+      },
+      {
+        "title": "在radixtree_uri_with_parameter路由模式下动态转发请求",
+        "anchor": "在-radixtree_uri_with_parameter-路由模式下动态转发请求"
+      }
+    ]
+  },
+  "grpc-transcode": {
+    "overview": [
+      "grpc-transcode 插件在 HTTP 请求与 gRPC 请求及其对应响应之间进行转换。",
+      "启用此插件后，APISIX 接收来自客户端的 HTTP 请求，转码后转发给上游 gRPC 服务。当 APISIX 收到 gRPC 响应时，会将其转换回 HTTP 响应并发送给客户端。"
+    ],
+    "fields": {
+      "route": {
+        "proto_id": "proto 资源的 ID，包含 Protocol Buffer 定义。",
+        "service": "gRPC 服务名称。",
+        "method": "gRPC 服务的方法名称。",
+        "deadline": "gRPC 服务的超时时间，单位为毫秒。即 APISIX 等待 gRPC 调用完成的时间。",
+        "pb_option": "编码器和解码器 选项 。",
+        "show_status_in_body": "若为 true ，则在响应体中展示解析后的 grpc-status-details-bin 。",
+        "status_detail_type": "grpc-status-details-bin 中 details 部分对应的消息类型。若未指定，错误消息将不会被解码。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在 HTTP 和 gRPC 请求之间转换",
+        "anchor": "在-http-和-grpc-请求之间转换"
+      },
+      {
+        "title": "使用 .pb 文件配置 Protobuf",
+        "anchor": "使用-pb-文件配置-protobuf"
+      },
+      {
+        "title": "在响应体中显示错误详情",
+        "anchor": "在响应体中显示错误详情"
+      },
+      {
+        "title": "配置编码器/解码器选项",
+        "anchor": "配置编码器解码器选项"
+      }
+    ]
+  },
+  "grpc-web": {
+    "overview": [
+      "gRPC 是一个基于 HTTP/2 和 Protocol Buffers 的高性能 RPC 框架，但浏览器原生不支持它。gRPC-Web 定义了一种浏览器兼容协议，可通过 HTTP/1.1 或 HTTP/2 发送 gRPC 请求。",
+      "grpc-web 插件将 gRPC-Web 请求转换为原生 gRPC 调用，并转发给上游 gRPC 服务。"
+    ],
+    "fields": {
+      "route": {
+        "cors_allow_headers": "跨域请求中允许携带的请求头，多个请求头用 , 分隔。"
+      }
+    },
+    "examples": [
+      {
+        "title": "前提条件",
+        "anchor": "前提条件"
+      },
+      {
+        "title": "代理 gRPC-Web（前缀匹配路由）",
+        "anchor": "代理-grpc-web前缀匹配路由"
+      }
+    ]
+  },
+  "body-transformer": {
+    "overview": [
+      "body-transformer 插件执行基于模板的转换，将请求和/或响应主体从一种格式转换为另一种格式，例如从 JSON 到 JSON、从 JSON 到 HTML 或从 XML 到 YAML。"
+    ],
+    "fields": {
+      "route": {
+        "request": "请求体转换配置。",
+        "request.input_format": "请求体原始媒体类型。若未指定，则该值将由 Content-Type 标头确定以应用相应的解码器。 xml 选项对应于 text/xml 媒体类型。 json 选项对应于 application/json 媒体类型。 encoded 选项对应于 application/x-www-form-urlencoded 媒体类型。 args 选项对应于 GET 请求。 plain 选项对应于 text/plain 媒体类型。 multipart 选项对应于 multipart/related 媒体类型。如果媒体类型不是这两种类型，则该值将保留未设置状态并直接应用转换模板。",
+        "request.template": "请求体转换模板。模板使用 lua-resty-template 语法。有关更多详细信息，请参阅 模板语法 。你还可以使用辅助函数 _escape_json() 和 _escape_xml() 转义双引号等特殊字符，使用 _body 访问请求正文，使用 _ctx 访问上下文变量。",
+        "request.template_is_base64": "如果模板是 base64 编码的，则设置为 true。",
+        "response": "响应体转换配置。",
+        "response.input_format": "响应体原始媒体类型。若未指定，则在可识别的情况下会根据 Content-Type 标头自动确定解码器： xml 对应 text/xml ， json 对应 application/json ， encoded 对应 application/x-www-form-urlencoded ， multipart 对应任意 multipart/* 内容类型。 args 选项表示读取请求的 URI query args，而非解码响应体。 plain 选项需显式指定，不会从 Content-Type: text/plain 自动识别。如果媒体类型不属于上述任一受支持的类型，则该值将保留未设置状态并直接应用转换模板。",
+        "response.template": "响应主体转换模板。",
+        "response.template_is_base64": "如果模板是 base64 编码的，则设置为 true。"
+      }
+    },
+    "examples": [
+      {
+        "title": "JSON 和 XML SOAP 之间的转换",
+        "anchor": "json-和-xml-soap-之间的转换"
+      },
+      {
+        "title": "修改请求体",
+        "anchor": "修改请求体"
+      },
+      {
+        "title": "使用变量生成请求主体",
+        "anchor": "使用变量生成请求主体"
+      },
+      {
+        "title": "将正文从 YAML 转换为 JSON",
+        "anchor": "将正文从-yaml-转换为-json"
+      },
+      {
+        "title": "将表单 URL 编码主体转换为 JSON",
+        "anchor": "将表单-url-编码主体转换为-json"
+      },
+      {
+        "title": "将 GET 请求查询参数转换为正文",
+        "anchor": "将-get-请求查询参数转换为正文"
+      },
+      {
+        "title": "转换纯文本媒体类型",
+        "anchor": "转换纯文本媒体类型"
+      },
+      {
+        "title": "转换多部分媒体类型",
+        "anchor": "转换多部分媒体类型"
+      },
+      {
+        "title": "根据消费者身份转换响应体",
+        "anchor": "根据消费者身份转换响应体"
+      },
+      {
+        "title": "根据消费者身份转换嵌套响应体",
+        "anchor": "根据消费者身份转换嵌套响应体"
+      }
+    ]
+  },
+  "degraphql": {
+    "overview": [
+      "degraphql 插件支持通过将 GraphQL 查询映射到 HTTP 端点，使用普通 HTTP 请求与上游 GraphQL 服务进行通信。"
+    ],
+    "fields": {
+      "route": {
+        "query": "发送到上游的 GraphQL 查询。",
+        "operation_name": "操作名称，仅在查询中存在多个操作时需要。",
+        "variables": "GraphQL 查询中使用的变量名称，从请求体或查询字符串中提取。"
+      }
+    },
+    "examples": [
+      {
+        "title": "转换基本查询",
+        "anchor": "转换基本查询"
+      },
+      {
+        "title": "转换带变量的查询",
+        "anchor": "转换带变量的查询"
+      }
+    ]
+  },
+  "exit-transformer": {
+    "overview": [
+      "exit-transformer 插件拦截由 APISIX 自身生成的响应——例如认证失败、限流拒绝或上游错误——并在发送给客户端之前，通过用户自定义的 Lua 函数对其进行转换。",
+      "该插件通过注册回调函数的方式工作：当 core.response.exit() 被调用时，回调函数依次执行，接收响应的 (状态码, 响应体, 响应头) 作为参数，并返回（可能已修改的）值。多个函数可以链式执行，前一个函数的输出作为下一个函数的输入。"
+    ],
+    "fields": {
+      "route": {
+        "functions": "Lua 函数源码字符串数组。每个字符串必须是一个完整的 Lua 代码块，该代码块须返回一个函数。函数接收 (status_code, body, headers) 三个参数，并必须返回 status_code, body, headers （修改后的或原始值）。若函数抛出异常，错误将被记录到日志，原始值将被传递给下一个函数。"
+      }
+    },
+    "examples": [
+      {
+        "title": "重映射状态码",
+        "anchor": "重映射状态码"
+      },
+      {
+        "title": "统一错误响应格式",
+        "anchor": "统一错误响应格式"
+      }
+    ]
+  },
+  "fault-injection": {
+    "overview": [
+      "fault-injection 插件通过模拟受控故障或延迟来测试应用程序的弹性。该插件在其他已配置插件之前执行，确保故障被一致性地应用。这使其非常适合混沌工程等场景，用于分析系统在故障条件下的行为。",
+      "该插件支持两种主要操作："
+    ],
+    "fields": {
+      "route": {
+        "abort": "终止请求并向客户端返回特定 HTTP 状态码的配置。 abort 和 delay 至少需要配置其中一个。",
+        "abort.http_status": "返回给客户端的 HTTP 状态码。配置 abort 时必填。",
+        "abort.body": "返回给客户端的响应体。支持使用 NGINX 变量 ，例如 client addr: $remote_addr\\n 。",
+        "abort.headers": "返回给客户端的响应头。标头值可包含 NGINX 变量 ，例如 $remote_addr 。",
+        "abort.percentage": "被终止的请求占比。若同时配置了 vars ，则两个条件都必须满足。",
+        "abort.vars": "终止请求前需匹配的规则。支持 lua-resty-expr 表达式，可通过 AND/OR 逻辑组合多个条件。",
+        "delay": "延迟请求的配置。 abort 和 delay 至少需要配置其中一个。",
+        "delay.duration": "延迟时长（秒），可以为小数。配置 delay 时必填。",
+        "delay.percentage": "被延迟的请求占比。若同时配置了 vars ，则两个条件都必须满足。",
+        "delay.vars": "延迟请求前需匹配的规则。支持 lua-resty-expr 表达式，可通过 AND/OR 逻辑组合多个条件。"
+      }
+    },
+    "examples": [
+      {
+        "title": "注入故障",
+        "anchor": "注入故障"
+      },
+      {
+        "title": "注入延迟",
+        "anchor": "注入延迟"
+      },
+      {
+        "title": "条件注入故障",
+        "anchor": "条件注入故障"
+      }
+    ]
+  },
+  "gm": {
+    "overview": [
+      "gm 插件能启用国密相关的功能。目前支持通过该插件动态配置国密双证书。",
+      "相关介绍"
+    ],
+    "fields": {},
+    "examples": []
+  },
+  "mocking": {
+    "overview": [
+      "mocking 插件允许你在不将请求转发到上游服务的情况下模拟 API 响应。该插件支持自定义响应状态码、响应体、响应头等。在开发、测试或调试阶段，当实际上游服务不可用、正在维护或调用成本较高时，该插件尤为有用。"
+    ],
+    "fields": {
+      "route": {
+        "delay": "延迟返回响应的时间，单位为秒。",
+        "response_status": "响应的 HTTP 状态码。",
+        "content_type": "响应的 Content-Type 标头值。",
+        "response_example": "响应体内容。支持 NGINX 变量 ，例如 $remote_addr 。 response_example 与 response_schema 至少配置其中一个；若同时配置，以 response_example 为准， response_schema 将被忽略。",
+        "response_schema": "用于生成随机模拟响应体的 JSON Schema 对象。 response_schema 与 response_example 至少配置其中一个；若同时配置，以 response_example 为准， response_schema 将被忽略。",
+        "with_mock_header": "设置为 true 时，将添加响应头 x-mock-by: APISIX/{version} 。",
+        "response_headers": "要添加到模拟响应中的标头。例如： {\"X-Foo\": \"bar\"} 。"
+      }
+    },
+    "examples": [
+      {
+        "title": "生成特定模拟响应",
+        "anchor": "生成特定模拟响应"
+      },
+      {
+        "title": "生成模拟响应标头",
+        "anchor": "生成模拟响应标头"
+      },
+      {
+        "title": "使用 JSON Schema 生成模拟响应",
+        "anchor": "使用-json-schema-生成模拟响应"
+      }
+    ]
+  },
+  "key-auth": {
+    "overview": [
+      "key-auth 插件支持使用身份验证密钥作为客户端在访问上游资源之前进行身份验证的机制。",
+      "要使用该插件，你需要在 消费者 上配置身份验证密钥，并在路由或服务上启用该插件。密钥可以包含在请求 URL 查询字符串或请求标头中。APISIX 将验证密钥以确定是否应允许或拒绝请求访问上游资源。"
+    ],
+    "fields": {
+      "consumer": {
+        "key": "标识消费者凭证的唯一密钥。使用 etcd 作为配置中心且开启 apisix.data_encryption.enable_encrypt_fields 时，密钥在存储到 etcd 之前会使用 AES 加密。你也可以将其存储在环境变量中并使用 $env:// 前缀引用，或存储在 HashiCorp Vault 等密钥管理器中并使用 $secret:// 前缀引用。"
+      },
+      "route": {
+        "header": "获取密钥的请求标头名称。",
+        "query": "获取密钥的查询字符串参数名称，优先级低于 header 。",
+        "hide_credentials": "若为 true ，则不将含有认证信息的标头或查询字符串传递给上游服务。",
+        "anonymous_consumer": "匿名消费者名称。如果已配置，则允许匿名用户绕过身份验证。",
+        "realm": "在身份验证失败时， 401 Unauthorized 响应中 WWW-Authenticate 标头的域值。该参数在 Apache APISIX 3.15.0 及以上版本中可用。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在路由上实现密钥认证",
+        "anchor": "在路由上实现密钥认证"
+      },
+      {
+        "title": "隐藏上游的身份验证信息",
+        "anchor": "隐藏上游的身份验证信息"
+      },
+      {
+        "title": "演示标头和查询中的密钥优先级",
+        "anchor": "演示标头和查询中的密钥优先级"
+      },
+      {
+        "title": "将消费者自定义 ID 添加到标头",
+        "anchor": "将消费者自定义-id-添加到标头"
+      },
+      {
+        "title": "匿名消费者的速率限制",
+        "anchor": "匿名消费者的速率限制"
+      }
+    ]
+  },
+  "jwt-auth": {
+    "overview": [
+      "jwt-auth 插件支持使用 JSON Web Token（JWT） 作为客户端在访问上游资源之前进行身份验证的机制。",
+      "启用后，该插件会暴露一个端点，供 消费者 创建 JWT 凭据。该过程会生成一个令牌，客户端请求应携带该令牌以向 APISIX 标识自身。令牌可以包含在请求 URL 查询字符串、请求头或 Cookie 中。APISIX 随后会验证该令牌，以判断是否允许或拒绝请求访问上游资源。"
+    ],
+    "fields": {
+      "consumer": {
+        "key": "用于标识消费者凭据的唯一键。",
+        "secret": "算法为对称算法时，用于签名和验证 JWT 的共享密钥。使用 HS256 、 HS384 或 HS512 算法时必填。该字段支持使用 APISIX Secret 资源将值保存在 Secret Manager 中。",
+        "public_key": "由所配置非对称算法使用的公钥（PEM 格式）。当 algorithm 为 RS256 、 ES256 、 RS384 、 RS512 、 ES384 、 ES512 、 PS256 、 PS384 、 PS512 或 EdDSA 时必填。该字段支持使用 APISIX Secret 资源将值保存在 Secret Manager 中。",
+        "algorithm": "加密算法。",
+        "exp": "令牌的过期时间，单位为秒。若不使用 APISIX 签发 JWT，则该参数会被忽略，签发时应在 payload 中指定过期时间。",
+        "base64_secret": "若密钥经过 base64 编码，则设为 true。",
+        "lifetime_grace_period": "宽限期，单位为秒。用于处理生成 JWT 的服务器与验证 JWT 的服务器之间的时钟偏差。"
+      },
+      "route": {
+        "header": "用于获取令牌的请求头。",
+        "query": "用于获取令牌的查询字符串。优先级低于 header。",
+        "cookie": "用于获取令牌的 Cookie。优先级低于 query。",
+        "hide_credentials": "若为 true，则不将携带 JWT 的 header、query 或 cookie 传递给上游服务。",
+        "anonymous_consumer": "匿名消费者名称。配置后，允许匿名用户绕过身份验证。",
+        "claims_to_verify": "指定需要验证的 JWT 声明，以确保令牌在其允许的时间范围内使用。注意，这不是要求 payload 中必须存在的声明，而是在声明存在时进行验证。",
+        "store_in_ctx": "若为 true，则将 JWT payload 存储在请求上下文变量 ctx.jwt_auth_payload 中，以便在同一请求中在 jwt-auth 之后执行的插件获取和使用 payload 信息。",
+        "realm": "身份验证失败时，在 WWW-Authenticate 响应头中包含的 realm 值。",
+        "key_claim_name": "JWT payload 中用于标识关联密钥的声明，例如 iss 。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用 JWT 进行消费者身份验证",
+        "anchor": "使用-jwt-进行消费者身份验证"
+      },
+      {
+        "title": "在请求头、查询字符串或 Cookie 中携带 JWT",
+        "anchor": "在请求头查询字符串或-cookie-中携带-jwt"
+      },
+      {
+        "title": "在环境变量中管理密钥",
+        "anchor": "在环境变量中管理密钥"
+      },
+      {
+        "title": "在 Secret Manager 中管理密钥",
+        "anchor": "在-secret-manager-中管理密钥"
+      },
+      {
+        "title": "使用 RS256 算法签名 JWT",
+        "anchor": "使用-rs256-算法签名-jwt"
+      },
+      {
+        "title": "在请求头中添加消费者自定义 ID",
+        "anchor": "在请求头中添加消费者自定义-id"
+      },
+      {
+        "title": "使用匿名消费者进行限速",
+        "anchor": "使用匿名消费者进行限速"
+      }
+    ]
+  },
+  "basic-auth": {
+    "overview": [
+      "basic-auth 插件为 消费者 添加了 基本访问身份验证 ，以便消费者在访问上游资源之前进行身份验证。",
+      "当消费者成功通过身份验证后，APISIX 会在将请求代理到上游服务之前向请求添加其他标头，例如 X-Consumer-Username 、 X-Credential-Identifier 和其他消费者自定义标头（如果已配置）。上游服务将能够区分消费者并根据需要实现其他逻辑。如果这些值中的任何一个不可用，则不会添加相应的标头。"
+    ],
+    "fields": {
+      "consumer": {
+        "username": "消费者的唯一基本认证用户名。",
+        "password": "消费者的基本认证密码。密码在存储到 etcd 之前会使用 AES 加密。你也可以将其存储在环境变量中并使用 env:// 前缀引用，或存储在 HashiCorp Vault 等密钥管理器中并使用 secret:// 前缀引用。"
+      },
+      "route": {
+        "hide_credentials": "若为 true ，则不将 Authorization 请求标头传递给上游服务。",
+        "anonymous_consumer": "匿名消费者名称。如果已配置，则允许匿名用户绕过身份验证。",
+        "realm": "在身份验证失败时， 401 Unauthorized 响应中 WWW-Authenticate 标头的域值。该参数在 Apache APISIX 3.15.0 及以上版本中可用。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在路由上实现基本身份验证",
+        "anchor": "在路由上实现基本身份验证"
+      },
+      {
+        "title": "隐藏上游的身份验证信息",
+        "anchor": "隐藏上游的身份验证信息"
+      },
+      {
+        "title": "将消费者自定义 ID 添加到标头",
+        "anchor": "将消费者自定义-id-添加到标头"
+      },
+      {
+        "title": "匿名消费者的速率限制",
+        "anchor": "匿名消费者的速率限制"
+      }
+    ]
+  },
+  "authz-keycloak": {
+    "overview": [
+      "authz-keycloak 插件与 Keycloak 集成，用于用户认证和授权。有关本插件可用配置选项的更多信息，请参阅 Keycloak 的 Authorization Services Guide 。",
+      "虽然本插件是针对 Keycloak 开发的，但理论上也可与其他符合 OAuth/OIDC 和 UMA 规范的身份提供商一起使用。"
+    ],
+    "fields": {
+      "route": {
+        "discovery": "Keycloak Authorization Services 的 发现文档 URL。",
+        "token_endpoint": "支持 urn:ietf:params:oauth:grant-type:uma-ticket 授权类型的符合 OAuth2 规范的令牌端点。若设置，将覆盖从发现文档中获取的值。",
+        "resource_registration_endpoint": "符合 UMA 规范的资源注册端点。若设置，将覆盖从发现文档中获取的值。",
+        "client_id": "客户端尝试访问的资源服务器的标识符。",
+        "client_secret": "客户端密钥 (如需要)。可以使用 APISIX Secret 存储和引用该值。APISIX 目前支持通过两种方式存储 secret: 环境变量和 HashiCorp Vault 。",
+        "permissions": "字符串数组，每个字符串代表客户端请求访问的一个或多个资源和作用域的集合。",
+        "lazy_load_paths": "设置为 true 时，使用资源注册端点将请求 URI 动态解析为资源，而非使用静态权限。",
+        "http_method_as_scope": "设置为 true 时，将 HTTP 请求方法映射为同名作用域，并添加到所有请求的权限中。",
+        "timeout": "与 Identity Server 进行 HTTP 连接的超时时间 (毫秒)。",
+        "access_token_expires_in": "访问令牌的过期时间 (秒)。",
+        "access_token_expires_leeway": "访问令牌续期的宽限时间 (秒)。设置后，将在令牌过期前 access_token_expires_leeway 秒进行续期，以避免访问令牌恰好在到达 OAuth 资源服务器时过期的错误。",
+        "refresh_token_expires_in": "刷新令牌的过期时间 (秒)。",
+        "refresh_token_expires_leeway": "刷新令牌续期的宽限时间 (秒)。设置后，将在令牌过期前 refresh_token_expires_leeway 秒进行续期，以避免刷新令牌恰好在到达 OAuth 资源服务器时过期的错误。",
+        "ssl_verify": "设置为 true 时，验证 TLS 证书与主机名是否匹配。",
+        "cache_ttl_seconds": "插件缓存发现文档和用于向 Keycloak 认证的令牌的最长时间 (秒)。",
+        "keepalive": "设置为 true 时，启用 HTTP keep-alive，保持连接在使用后不关闭。如果预期有大量请求发往 Keycloak，建议设为 true 。",
+        "keepalive_timeout": "已建立的 HTTP 连接在空闲多久后关闭。",
+        "keepalive_pool": "连接池中的最大连接数。",
+        "access_denied_redirect_uri": "用于替代返回 \"error_description\":\"not_authorized\" 错误信息而重定向用户的 URI。",
+        "password_grant_token_generation_incoming_uri": "设置此项以使用密码授权类型生成令牌。插件会将传入请求的 URI 与此值进行比较。"
+      }
+    },
+    "examples": [
+      {
+        "title": "配置 Keycloak",
+        "anchor": "配置-keycloak"
+      },
+      {
+        "title": "使用懒加载路径和资源注册端点",
+        "anchor": "使用懒加载路径和资源注册端点"
+      },
+      {
+        "title": "使用静态权限",
+        "anchor": "使用静态权限"
+      },
+      {
+        "title": "在自定义令牌端点使用密码授权类型生成令牌",
+        "anchor": "在自定义令牌端点使用密码授权类型生成令牌"
+      }
+    ]
+  },
+  "authz-casdoor": {
+    "overview": [
+      "使用 authz-casdoor 插件可添加 Casdoor 集中认证方式。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint_addr": "Casdoor 的 URL。",
+        "client_id": "Casdoor 的客户端 id。",
+        "client_secret": "Casdoor 的客户端密钥。",
+        "callback_url": "用于接收 code 与 state 的回调地址。"
+      }
+    },
+    "examples": []
+  },
+  "wolf-rbac": {
+    "overview": [
+      "wolf-rbac 插件为 role-based access control 系统提供了添加 wolf 到 Route 或 Service 的功能。此插件需要与 Consumer 一起使用。"
+    ],
+    "fields": {
+      "route": {
+        "server": "wolf-server 的服务地址。",
+        "appid": "在 wolf-console 中已经添加的应用 id。该字段支持使用 APISIX Secret 资源，将值保存在 Secret Manager 中。",
+        "header_prefix": "自定义 HTTP 头的前缀。 wolf-rbac 在鉴权成功后，会在请求头 (用于传给后端) 及响应头 (用于传给前端) 中添加 3 个 header： X-UserId , X-Username , X-Nickname 。"
+      }
+    },
+    "examples": []
+  },
+  "openid-connect": {
+    "overview": [
+      "openid-connect 插件支持与 OpenID Connect (OIDC) 身份提供商集成，例如 Keycloak、Auth0、Microsoft Entra ID、Google、Okta 等。它允许 APISIX 在允许或拒绝客户端访问受保护的上游资源之前，先对客户端进行身份验证并从身份提供商获取相关信息。"
+    ],
+    "fields": {
+      "route": {
+        "client_id": "OAuth 客户端 ID。",
+        "client_secret": "OAuth 客户端密钥。",
+        "discovery": "OpenID 提供商的 well-known 发现文档 URL，包含 OP API 端点列表。插件可直接使用发现文档中的端点。你也可以单独配置这些端点，单独配置的值优先于发现文档中提供的端点。",
+        "scope": "与认证用户相关信息对应的 OIDC 范围，也称为 claims 。用于授权具有适当权限的用户。默认值为 openid ，这是 OIDC 返回唯一标识认证用户的 sub claim 所需的范围。可以附加额外的范围并以空格分隔，例如 openid email profile 。",
+        "required_scopes": "访问令牌中必须存在的范围。如果缺少任何必需范围，插件将以 403 forbidden 错误拒绝请求。在授权码流程中，已授予的范围取自访问令牌的 scope 声明；当访问令牌中没有该声明时，回退到 ID 令牌的同名声明。两者都无法确定已授予范围的会话会被拒绝。",
+        "realm": "由于无效 bearer token 导致 401 未授权请求时， WWW-Authenticate 响应头中的 Realm 值。",
+        "bearer_only": "如果为 true，则严格要求请求中携带 bearer 访问令牌进行身份验证。",
+        "logout_path": "触发注销的路径。",
+        "post_logout_redirect_uri": "logout_path 收到注销请求后重定向用户的 URL。",
+        "redirect_uri": "与 OpenID 提供商完成身份验证后的重定向 URI。注意，重定向 URI 不应与请求 URI 相同，而应为请求 URI 的子路径。例如，如果路由的 uri 为 /api/v1/* ，则 redirect_uri 可配置为 /api/v1/redirect 。如果未配置 redirect_uri ，APISIX 将在请求 URI 后追加 /.apisix/redirect 作为 redirect_uri 的值。",
+        "timeout": "请求超时时间，单位为秒。",
+        "ssl_verify": "如果为 true，则验证 OpenID 提供商的 SSL 证书。注意：该属性的默认值在 APISIX 3.16.0 中从 false 更改为 true ，这是一个破坏性变更。如果你从早期版本升级，请确保你的 OpenID 提供商 SSL 证书有效，或显式将其设置为 false 以保持之前的行为。",
+        "introspection_endpoint": "OpenID 提供商用于内省访问令牌的 令牌内省 端点 URL。如果未设置，则使用 well-known 发现文档中提供的内省端点作为 备选项 。",
+        "introspection_endpoint_auth_method": "令牌内省端点的认证方法。值应为 well-known 发现文档中 introspection_endpoint_auth_methods_supported 授权服务器元数据 指定的认证方法之一，例如 client_secret_basic 、 client_secret_post 、 private_key_jwt 和 client_secret_jwt 。",
+        "token_endpoint_auth_method": "令牌端点的认证方法。值应为 well-known 发现文档中 token_endpoint_auth_methods_supported 授权服务器元数据 指定的认证方法之一，例如 client_secret_basic 、 client_secret_post 、 private_key_jwt 和 client_secret_jwt 。如果配置的方法不受支持，则回退到 token_endpoint_auth_methods_supported 数组中的第一个方法。",
+        "public_key": "使用非对称算法时用于验证 JWT 签名的公钥。提供此值进行令牌验证将跳过客户端凭证流中的令牌内省。可以以 -----BEGIN PUBLIC KEY-----\\n……\\n-----END PUBLIC KEY----- 格式传递公钥。",
+        "use_jwks": "如果为 true 且未设置 public_key ，则使用 JWKS 验证 JWT 签名并跳过客户端凭证流中的令牌内省。JWKS 端点从发现文档中解析。",
+        "use_pkce": "如果为 true，则按照 RFC 7636 定义，在授权码流程中使用 PKCE（Proof Key for Code Exchange）。",
+        "par": "Pushed Authorization Requests (PAR) 配置。",
+        "par.enabled": "如果为 true，则按照 RFC 9126 使用 OAuth 2.0 Pushed Authorization Requests (PAR)。授权请求参数会发送到 PAR 端点，浏览器将使用返回的 request_uri 重定向。",
+        "par.endpoint": "PAR 端点 URL。未设置时使用发现文档中的端点。",
+        "par.endpoint_auth_method": "PAR 端点的认证方法。未设置时使用 token_endpoint_auth_method 。 private_key_jwt 需要 client_rsa_private_key ， client_secret_jwt 需要 client_secret ；与令牌端点不同，PAR 请求在认证方法不可用时会直接失败。",
+        "dpop": "Demonstrating Proof of Possession (DPoP) 配置。",
+        "dpop.enabled": "如果为 true，则按照 RFC 9449 使用 OAuth 2.0 DPoP。插件会向令牌端点发送 DPoP proof JWT，并在用户信息请求中使用 DPoP 绑定的访问令牌。",
+        "dpop.signing_alg": "DPoP proof JWT 的签名算法。",
+        "dpop.private_key": "用于签署 DPoP proof JWT 的 PEM 编码私钥。当 dpop.enabled 为 true 时必填。",
+        "dpop.public_jwk": "与 dpop.private_key 匹配的公钥 JWK。当 dpop.enabled 为 true 时必填。该 JWK 不得包含私钥材料。",
+        "token_signing_alg_values_expected": "用于签署 JWT 的算法，例如 RS256 。",
+        "set_access_token_header": "如果为 true，则在请求标头中设置访问令牌。默认情况下，使用 X-Access-Token 标头。",
+        "access_token_in_authorization_header": "如果为 true 并且 set_access_token_header 也为 true，则在 Authorization 标头中设置访问令牌。",
+        "set_id_token_header": "如果为 true 并且 ID 令牌可用，则在 X-ID-Token 请求标头中设置值。",
+        "set_userinfo_header": "如果为 true 并且用户信息数据可用，则在 X-Userinfo 请求标头中设置值。",
+        "set_refresh_token_header": "如果为 true 并且刷新令牌可用，则在 X-Refresh-Token 请求标头中设置值。",
+        "session": "当 bearer_only 为 false 且插件使用 Authorization Code 流程时使用的 Session 配置。",
+        "session.secret": "当 bearer_only 为 false 时，用于 session 加密和 HMAC 运算的密钥。",
+        "session.cookie_name": "会话 Cookie 名称。作为 cookie_name 透传到 lua-resty-session 4.x。",
+        "session.cookie_path": "Cookie 路径范围。作为 cookie_path 透传到 lua-resty-session。",
+        "session.cookie_domain": "Cookie 域范围。作为 cookie_domain 透传到 lua-resty-session。",
+        "session.cookie_secure": "若为 true，则设置 Cookie 的 Secure 属性。作为 cookie_secure 透传到 lua-resty-session。",
+        "session.cookie_http_only": "若为 true，则设置 Cookie 的 HttpOnly 属性。作为 cookie_http_only 透传到 lua-resty-session。",
+        "session.cookie_same_site": "Cookie 的 SameSite 属性。作为 cookie_same_site 透传到 lua-resty-session。",
+        "session.idling_timeout": "会话空闲超时时间（秒）。作为 idling_timeout 透传到 lua-resty-session。",
+        "session.rolling_timeout": "会话滚动超时时间（秒）。作为 rolling_timeout 透传到 lua-resty-session。",
+        "session.absolute_timeout": "会话绝对生存时间（秒）。作为 absolute_timeout 透传到 lua-resty-session。",
+        "session.cookie.lifetime": "已弃用。当未设置 session.absolute_timeout 时，运行时会将该值映射到 session.absolute_timeout 。请改用 session.absolute_timeout 。",
+        "session.storage": "会话存储方式。",
+        "session.redis": "storage 为 redis 时的 Redis 配置。",
+        "session.redis.host": "Redis 主机。",
+        "session.redis.port": "Redis 端口。",
+        "session.redis.username": "Redis 用户名。",
+        "session.redis.password": "Redis 密码。",
+        "session.redis.database": "Redis 数据库索引。",
+        "session.redis.prefix": "Redis 键前缀。",
+        "session.redis.ssl": "为 Redis 连接启用 SSL。",
+        "session.redis.ssl_verify": "验证 Redis 连接的 SSL 证书。",
+        "session.redis.server_name": "用于 SNI 的 Redis 服务器名称。",
+        "session.redis.connect_timeout": "连接超时时间，单位为毫秒。",
+        "session.redis.send_timeout": "发送超时时间，单位为毫秒。",
+        "session.redis.read_timeout": "读取超时时间，单位为毫秒。",
+        "session.redis.keepalive_timeout": "保活超时时间，单位为毫秒。",
+        "session_contents": "会话内容配置。如果未配置，所有数据将存储在会话中。",
+        "session_contents.access_token": "如果为 true，则在会话中存储访问令牌。",
+        "session_contents.id_token": "如果为 true，则在会话中存储 ID 令牌。",
+        "session_contents.enc_id_token": "如果为 true，则在会话中存储加密的 ID 令牌。",
+        "session_contents.user": "如果为 true，则在会话中存储用户信息。",
+        "unauth_action": "未认证请求的处理方式。设置为 auth 时，重定向到 OpenID 提供商的认证端点。设置为 pass 时，允许请求不经认证通过。设置为 deny 时，返回 401 未认证响应而不启动授权码授权流程。",
+        "proxy_opts": "OpenID 提供商所在代理服务器的配置。",
+        "proxy_opts.http_proxy": "HTTP 请求的代理服务器地址，例如 http://<proxy_host>:<proxy_port> 。",
+        "proxy_opts.https_proxy": "HTTPS 请求的代理服务器地址，例如 http://<proxy_host>:<proxy_port> 。",
+        "proxy_opts.http_proxy_authorization": "与 http_proxy 一起使用的默认 Proxy-Authorization 头值。可以用自定义 Proxy-Authorization 请求头覆盖。",
+        "proxy_opts.https_proxy_authorization": "与 https_proxy 一起使用的默认 Proxy-Authorization 头值。由于 HTTPS 连接时已完成授权，不能用自定义 Proxy-Authorization 请求头覆盖。",
+        "proxy_opts.no_proxy": "不需要代理的主机列表，以逗号分隔。",
+        "authorization_params": "发送到授权端点请求中的额外参数。",
+        "client_rsa_private_key": "用于签署客户端断言 JWT 的客户端私钥。只要 token_endpoint_auth_method 、 introspection_endpoint_auth_method 或 par.endpoint_auth_method 中任一选择了 private_key_jwt 就必填。密钥类型必须与 client_jwt_assertion_alg 匹配： RS* 算法用 RSA 密钥， ES* 算法用对应曲线的 EC 密钥。",
+        "client_rsa_private_key_id": "用于计算已签名客户端断言 JWT 的客户端私钥 ID。任一端点选择 private_key_jwt 时可选。",
+        "client_jwt_assertion_expires_in": "向 OP 进行身份验证的已签名 JWT 的有效期，单位为秒。令牌、内省或 PAR 端点中任一选择 private_key_jwt 或 client_secret_jwt 时使用。",
+        "client_jwt_assertion_alg": "客户端断言 JWT 的签名算法。 private_key_jwt 默认使用 RS256 ， client_secret_jwt 默认使用 HS256 。 client_secret_jwt 需使用 HS* 算法， private_key_jwt 需使用非对称算法。当发现文档声明 token_endpoint_auth_signing_alg_values_supported 时，配置值还必须受 OP 支持。",
+        "client_jwt_assertion_audience": "客户端断言 JWT 的 audience。未设置时使用被调用的端点 URL。当 APISIX 通过内部 URL 访问令牌端点，但 OP 期望外部令牌端点 URL 作为 audience 时，请配置此项。",
+        "renew_access_token_on_expiry": "如果为 true，则在访问令牌过期或刷新令牌可用时尝试静默续期。如果令牌续期失败，则重定向用户重新认证。",
+        "access_token_expires_in": "当令牌端点响应中没有 expires_in 属性时，访问令牌的有效期，单位为秒。",
+        "refresh_session_interval": "无需重新认证即可刷新用户 ID 令牌的时间间隔，单位为秒。未设置时不检查网关向客户端签发的会话的过期时间。",
+        "iat_slack": "ID 令牌 iat claim 时钟偏差容忍度，单位为秒。",
+        "accept_none_alg": "如果 OpenID 提供商不对其 ID 令牌进行签名（例如签名算法设置为 none ），则设置为 true。",
+        "accept_unsupported_alg": "如果为 true，则忽略 ID 令牌签名以接受不支持的签名算法。",
+        "access_token_expires_leeway": "访问令牌续期的过期宽限时间，单位为秒。当设置为大于 0 的值时，令牌续期将在令牌过期前该时间量时进行。这可避免在访问令牌刚到达资源服务器时过期的错误。",
+        "force_reauthorize": "如果为 true，即使令牌已缓存也执行授权流程。",
+        "use_nonce": "如果为 true，则在授权请求中启用 nonce 参数。",
+        "revoke_tokens_on_logout": "如果为 true，则在注销时通知授权服务器之前获取的刷新令牌或访问令牌不再需要。",
+        "jwk_expires_in": "JWK 缓存的过期时间，单位为秒。",
+        "jwt_verification_cache_ignore": "如果为 true，则强制重新验证 bearer 令牌并忽略任何现有的缓存验证结果。",
+        "cache_segment": "缓存段的可选名称，用于分离和区分令牌内省或 JWT 验证使用的缓存。",
+        "introspection_interval": "缓存和内省的访问令牌的 TTL，单位为秒。默认值为 0，表示不使用此选项，插件默认使用 introspection_expiry_claim 定义的过期 claim 传递的 TTL。如果 introspection_interval 大于 0 且小于 introspection_expiry_claim 定义的过期 claim 传递的 TTL，则使用 introspection_interval 。",
+        "introspection_expiry_claim": "过期 claim 的名称，用于控制缓存和内省的访问令牌的 TTL。",
+        "introspection_addon_headers": "用于向内省 HTTP 请求追加额外头值。如果指定的头在原始请求中不存在，则不会追加该值。",
+        "claim_validator": "JWT claim 验证配置。",
+        "claim_validator.issuer.valid_issuers": "受信任的 JWT 颁发者数组。如果未配置，将使用发现端点返回的颁发者；在发现文档无法获取期间令牌会被拒绝，因为此时没有已知的受信任颁发者。",
+        "claim_validator.audience": "受众 claim 验证配置。",
+        "claim_validator.audience.claim": "包含受众的 claim 名称。",
+        "claim_validator.audience.required": "如果为 true，则受众 claim 为必填项，claim 名称为 claim 中定义的名称。",
+        "claim_validator.audience.match_with_client_id": "如果为 true，则要求受众与客户端 ID 匹配。如果受众是字符串，则必须与客户端 ID 完全匹配。如果受众是字符串数组，则至少一个值必须与客户端 ID 匹配。如果未找到匹配，将收到 mismatched audience 错误。不含受众声明的令牌同样会被拒绝，因为它无法与客户端 ID 匹配。OpenID Connect 规范规定了此要求，以确保令牌是为特定客户端颁发的。",
+        "claim_schema": "OIDC 响应 claim 的 JSON schema。示例： {\"type\":\"object\",\"properties\":{\"access_token\":{\"type\":\"string\"}},\"required\":[\"access_token\"]} - 验证响应包含必填的字符串字段 access_token 。"
+      }
+    },
+    "examples": [
+      {
+        "title": "授权码流程",
+        "anchor": "授权码流程"
+      },
+      {
+        "title": "使用 PAR 和 DPoP 的授权码流程",
+        "anchor": "使用-par-和-dpop-的授权码流程"
+      },
+      {
+        "title": "PKCE (Proof Key for Code Exchange)",
+        "anchor": "pkce-proof-key-for-code-exchange"
+      },
+      {
+        "title": "客户端凭证流程",
+        "anchor": "客户端凭证流程"
+      },
+      {
+        "title": "内省流程",
+        "anchor": "内省流程"
+      },
+      {
+        "title": "密码流程",
+        "anchor": "密码流程"
+      },
+      {
+        "title": "刷新令牌授权",
+        "anchor": "刷新令牌授权"
+      },
+      {
+        "title": "用户信息",
+        "anchor": "用户信息"
+      }
+    ]
+  },
+  "cas-auth": {
+    "overview": [
+      "The cas-auth Plugin can be used to access CAS (Central Authentication Service 2.0) IdP (Identity Provider)\nto do authentication, from the SP (service provider) perspective."
+    ],
+    "fields": {
+      "route": {
+        "max_req_body_size": ">= 1",
+        "idp_uri": "URI of IdP.",
+        "cas_callback_uri": "redirect uri used to callback the SP from IdP after login or logout.",
+        "logout_uri": "logout uri to trigger logout.",
+        "cookie": "configuration for the cookies the plugin issues during the CAS login flow.",
+        "cookie.secret": "secret (32+ characters) used to sign the request URI cookie. The same value must be configured on every APISIX node. Generate with e.g. openssl rand -base64 48 .",
+        "cookie.secure": "whether to set the Secure attribute on the issued cookies. Set to false only for deployments where the protected route is not served over HTTPS (e.g. internal-only or development environments).",
+        "cookie.samesite": "value for the SameSite cookie attribute. Allowed values are \"Lax\" and \"None\" ; \"Strict\" is intentionally not supported because it breaks the IdP→SP redirect when the IdP is on a different site."
+      }
+    },
+    "examples": []
+  },
+  "hmac-auth": {
+    "overview": [
+      "hmac-auth 插件支持 HMAC（基于哈希的消息认证码）认证，作为一种确保请求完整性的机制，防止它们在传输过程中被修改。要使用该插件，您需要在 Consumers 上配置 HMAC 密钥，并在 Routes 或 Services 上启用该插件。",
+      "当 Consumer 成功通过身份验证后，APISIX 会在将请求代理到上游服务之前向请求添加其他标头，例如 X-Consumer-Username 、 X-Credential-Identifier 和其他 Consumer 自定义标头（如果已配置）。上游服务将能够区分 Consumer 并根据需要实现其他逻辑。如果这些值中的任何一个不可用，则不会添加相应的标头。"
+    ],
+    "fields": {
+      "consumer": {
+        "key_id": "用于标识 HMAC 密钥/凭证的 keyId，并用于查找关联的 Consumer/Credential。",
+        "secret_key": "用于生成 HMAC 的密钥。此字段支持使用 APISIX Secret 资源将值保存在 Secret Manager 中。"
+      },
+      "route": {
+        "allowed_algorithms": "允许的 HMAC 算法列表。",
+        "clock_skew": "请求的 Date 头（必须为 GMT 格式）与 APISIX 当前时间之间允许的最大时间差（秒）。该机制用于在客户端与服务端时钟基本同步的前提下拒绝过期请求。要使该时效窗口具有实际意义， date 必须出现在 signed_headers 中，从而将 Date 的取值绑定进签名字符串。 signed_headers 默认值为 [\"date\"] ，开箱即默认完成该绑定。",
+        "signed_headers": "HMAC 签名字符串中必须包含的请求头列表。默认值为 [\"date\"] ，确保 Date 头始终被绑定进签名字符串，使得 clock_skew 时效校验所依据的取值同样受 HMAC 覆盖。如需覆盖默认值，请显式设置该字段；设置为空数组 [] 则完全取消该要求。",
+        "validate_request_body": "如果为 true，则验证请求正文的完整性，以确保在传输过程中没有被篡改。具体来说，插件会创建一个 SHA-256 的 base64 编码 digest，并将其与 Digest 头进行比较。如果 Digest 头丢失或 digest 不匹配，验证将失败。",
+        "hide_credentials": "如果为 true，则不会将授权请求头传递给上游服务。",
+        "anonymous_consumer": "匿名 Consumer 名称。如果已配置，则允许匿名用户绕过身份验证。",
+        "realm": "在身份验证失败时， WWW-Authenticate 响应标头中返回的域，状态码为 401 Unauthorized 。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在 Route 上实现 HMAC 身份验证",
+        "anchor": "在-route-上实现-hmac-身份验证"
+      },
+      {
+        "title": "对上游隐藏授权信息",
+        "anchor": "对上游隐藏授权信息"
+      },
+      {
+        "title": "启用请求正文验证",
+        "anchor": "启用请求正文验证"
+      },
+      {
+        "title": "强制签名标头",
+        "anchor": "强制签名标头"
+      },
+      {
+        "title": "匿名 Consumer 的速率限制",
+        "anchor": "匿名-consumer-的速率限制"
+      }
+    ]
+  },
+  "authz-casbin": {
+    "overview": [
+      "authz-casbin 插件是一个基于 Lua Casbin 的访问控制插件，该插件支持各种 access control models 的强大授权场景。"
+    ],
+    "fields": {
+      "route": {
+        "model_path": "Casbin 鉴权模型配置文件路径。",
+        "policy_path": "Casbin 鉴权策略配置文件路径。",
+        "model": "Casbin 鉴权模型的文本定义。",
+        "policy": "Casbin 鉴权策略的文本定义。",
+        "username": "描述请求中有可以通过访问控制的用户名。"
+      }
+    },
+    "examples": []
+  },
+  "ldap-auth": {
+    "overview": [
+      "ldap-auth 插件可用于给路由或服务添加 LDAP 身份认证，该插件使用 lua-resty-ldap 连接 LDAP 服务器。",
+      "该插件需要与 Consumer 一起配合使用，API 的调用方可以使用 basic authentication 与 LDAP 服务器进行认证。"
+    ],
+    "fields": {
+      "consumer": {
+        "user_dn": "LDAP 客户端的 dn，例如： cn=user01,ou=users,dc=example,dc=org 。该字段支持使用 APISIX Secret 资源，将值保存在 Secret Manager 中。"
+      },
+      "route": {
+        "base_dn": "LDAP 服务器的 dn，例如： ou=users,dc=example,dc=org 。",
+        "ldap_uri": "LDAP 服务器的 URI。",
+        "use_tls": "如果设置为 true 则表示启用 TLS。",
+        "tls_verify": "是否校验 LDAP 服务器的证书。如果设置为 true ，你必须设置 config.yaml 里面的 ssl_trusted_certificate ，并且确保 ldap_uri 里的 host 和服务器证书中的 host 匹配。",
+        "uid": "UID 属性。",
+        "hide_credentials": "如果设置为 true ，则不会将 Authorization 请求头传递给上游服务。该请求头中携带的目录密码通常在本 API 之外也可复用。",
+        "realm": "在身份验证失败时，应包含在 WWW-Authenticate 标头中的域。"
+      }
+    },
+    "examples": []
+  },
+  "jwe-decrypt": {
+    "overview": [
+      "jwe-decrypt 插件解密发送到 APISIX 路由 或 服务 的请求中的 JWE 授权请求头。",
+      "解密密钥应配置在 消费者 中。"
+    ],
+    "fields": {
+      "consumer": {
+        "key": "用于标识消费者凭证的唯一密钥。",
+        "secret": "加/解密共用的对称密钥。也可以将其存储在环境变量中并使用 env:// 前缀引用，或存储在 HashiCorp Vault 的 KV 密钥引擎等密钥管理器中并使用 secret:// 前缀引用。启用 is_base64_encoded 后， secret 长度可能超过 32 个字符，只需确保解码后长度仍为 32 个字符即可。",
+        "is_base64_encoded": "如果密钥为 Base64 编码，则设置为 true。"
+      },
+      "route": {
+        "header": "用于获取令牌的请求头。",
+        "forward_header": "传递明文给上游的请求头名称。",
+        "strict": "如果为 true，当请求中缺少 JWE 令牌时抛出 403 错误。如果为 false，当找不到 JWE 令牌时不抛出错误。"
+      }
+    },
+    "examples": [
+      {
+        "title": "创建带有解密密钥的消费者",
+        "anchor": "创建带有解密密钥的消费者"
+      },
+      {
+        "title": "使用 JWE 解密数据",
+        "anchor": "使用-jwe-解密数据"
+      }
+    ]
+  },
+  "multi-auth": {
+    "overview": [
+      "multi-auth 插件允许使用不同认证方式的消费者共享同一路由或服务。它支持配置多个认证插件，只要请求通过其中任意一种认证方式即可放行。"
+    ],
+    "fields": {
+      "route": {
+        "auth_plugins": "至少包含两个认证插件的数组。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在同一路由上允许不同的认证方式",
+        "anchor": "在同一路由上允许不同的认证方式"
+      }
+    ]
+  },
+  "opa": {
+    "overview": [
+      "opa 插件支持与 Open Policy Agent (OPA) 集成，OPA 是一个统一的策略引擎和框架，可用于定义和执行授权策略。授权逻辑以 Rego 语言编写并存储在 OPA 中。",
+      "配置后，OPA 引擎将根据定义的策略评估客户端对受保护路由的请求，以决定是否允许其访问上游资源。"
+    ],
+    "fields": {
+      "route": {
+        "host": "OPA 服务器地址。",
+        "policy": "要评估的策略路径。该值会被直接拼接到 OPA 的 /v1/data/<policy> 。 data.result 必须是一个包含 allow 字段的对象，并可按需包含 reason 、 headers 、 status_code 等字段；因此， policy 应指向返回该对象结构的路径，而不是仅返回 true 或 false 的布尔规则。",
+        "ssl_verify": "若为 true，则验证 OPA 服务器的 SSL 证书。",
+        "timeout": "HTTP 调用超时时间（毫秒）。",
+        "keepalive": "若为 true，则为多个请求保持连接活跃。",
+        "keepalive_timeout": "连接空闲后关闭的等待时间（毫秒）。",
+        "keepalive_pool": "空闲连接数。",
+        "with_route": "若为 true，发送当前路由的信息。",
+        "with_service": "若为 true，发送当前 Service 的信息。",
+        "with_consumer": "若为 true，发送当前消费者的信息。注意，Consumer 信息可能包含 API key 等敏感信息，仅在确认安全的情况下将此选项设为 true 。",
+        "send_headers_upstream": "请求被允许时，需要从 OPA 响应转发到上游服务的请求头名称列表。"
+      }
+    },
+    "examples": [
+      {
+        "title": "实现基本策略",
+        "anchor": "实现基本策略"
+      },
+      {
+        "title": "了解数据格式",
+        "anchor": "了解数据格式"
+      },
+      {
+        "title": "返回自定义响应",
+        "anchor": "返回自定义响应"
+      },
+      {
+        "title": "实现 RBAC",
+        "anchor": "实现-rbac"
+      }
+    ]
+  },
+  "forward-auth": {
+    "overview": [
+      "forward-auth 插件支持与外部授权服务集成，用于身份验证和授权。如果认证失败，将向客户端返回可自定义的错误消息。如果认证成功，请求将连同以下由 APISIX 添加的请求头一起转发到上游服务："
+    ],
+    "fields": {
+      "route": {
+        "uri": "外部授权服务的 URI。",
+        "ssl_verify": "如果为 true，则验证授权服务的 SSL 证书。",
+        "request_method": "APISIX 向外部授权服务发送请求时使用的 HTTP 方法。当设置为 POST 时，APISIX 将连同请求体一起向外部授权服务发送 POST 请求。如果授权决策依赖 POST 正文中的请求参数，建议使用 $post_arg.* 提取必要字段并通过 extra_headers 字段传递，而不是发送完整请求体。",
+        "request_headers": "需要转发给外部授权服务的客户端请求头。如果未配置，则只转发 APISIX 添加的请求头，例如 X-Forwarded-* 。",
+        "upstream_headers": "认证通过时，需要转发到 Upstream 服务的外部授权服务响应头。如果未配置，则不转发任何请求头。",
+        "client_headers": "认证失败时，需要转发给客户端的外部授权服务响应头。如果未配置，则不转发任何响应头。",
+        "extra_headers": "发送给授权服务的额外请求头，支持在值中使用 NGINX 变量 。",
+        "timeout": "外部授权服务 HTTP 调用的超时时间（毫秒）。",
+        "keepalive": "如果为 true，则保持连接以处理多个请求。",
+        "keepalive_timeout": "已建立的 HTTP 连接在关闭前的空闲时间（毫秒）。",
+        "keepalive_pool": "连接池中的最大连接数。",
+        "allow_degradation": "如果为 true，则允许在插件或其依赖项不可用时，APISIX 继续处理请求而不使用该插件。",
+        "status_on_error": "与外部授权服务出现网络错误时返回给客户端的 HTTP 状态码。"
+      }
+    },
+    "examples": [
+      {
+        "title": "将指定请求头转发至上游资源",
+        "anchor": "将指定请求头转发至上游资源"
+      },
+      {
+        "title": "认证失败时向客户端返回指定请求头",
+        "anchor": "认证失败时向客户端返回指定请求头"
+      },
+      {
+        "title": "基于 POST 请求体进行授权",
+        "anchor": "基于-post-请求体进行授权"
+      }
+    ]
+  },
+  "cors": {
+    "overview": [
+      "cors 插件允许你启用 跨域资源共享 (CORS，Cross-Origin Resource Sharing) 。CORS 是一种基于 HTTP 头的机制，它允许服务器指定除自身以外的任意源（域、协议或端口），并指示浏览器允许从这些源加载资源。"
+    ],
+    "fields": {
+      "route": {
+        "allow_origins": "允许跨域访问的 Origin，格式为 scheme://host:port ，示例如 https://somedomain.com:8081 。如果有多个 Origin，请使用 , 分隔。当 allow_credential 为 false 时，可以使用 * 表示允许所有 Origin 通过。开启 allow_credential 后可使用 ** 强制允许所有 Origin，但存在安全隐患。",
+        "allow_methods": "允许跨域访问的 HTTP 请求方法，比如 GET 、 POST 。如果有多个方法，请使用 , 分隔。当 allow_credential 为 false 时，可以使用 * 表示允许所有方法通过。开启 allow_credential 后可使用 ** 强制允许所有方法，但存在安全隐患。",
+        "allow_headers": "允许跨域访问时请求方携带哪些非 CORS 规范以外的 Header。如果有多个 Header，请使用 , 分隔。当 allow_credential 为 false 时，可以使用 * 表示允许所有 Header 通过。开启 allow_credential 后可使用 ** 强制允许所有 Header，但存在安全隐患。",
+        "expose_headers": "允许跨域访问时响应方携带哪些非 CORS 规范以外的 Header。如果有多个 Header，请使用 , 分隔。当 allow_credential 为 false 时，可以使用 * 表示允许任意 Header。如果不设置，插件不会修改 Access-Control-Expose-Headers 头，详情请参考 Access-Control-Expose-Headers - MDN 。",
+        "max_age": "浏览器缓存 CORS 预检请求结果的最大时间，单位为秒。在此时间范围内，浏览器会复用上一次的检查结果。设置为 -1 表示禁用缓存。请注意各浏览器允许的最大时间不同，详情请参考 Access-Control-Max-Age - MDN 。",
+        "allow_credential": "是否允许跨域访问的请求方携带凭据（如 Cookie 等）。根据 CORS 规范，如果设置该选项为 true ，那么将不能在其他属性中使用 * 。",
+        "allow_origins_by_regex": "使用正则表达式匹配允许跨域访问的 Origin，如 [\".*\\.test.com$\"] 可以匹配 test.com 的所有子域名。配置后，仅匹配正则表达式的域名会被允许， allow_origins 的配置将被忽略。",
+        "allow_origins_by_metadata": "通过引用插件元数据的 allow_origins 配置允许跨域访问的 Origin。比如当插件元数据为 \"allow_origins\": {\"EXAMPLE\": \"https://example.com\"} 时，配置 [\"EXAMPLE\"] 将允许 Origin https://example.com 的访问。",
+        "timing_allow_origins": "允许访问资源时序信息的 Origin 列表，多个 Origin 使用 , 分隔。详情请参考 Timing-Allow-Origin 。",
+        "timing_allow_origins_by_regex": "使用正则表达式匹配允许访问资源时序信息的 Origin，如 [\".*\\.test.com\"] 可以匹配 test.com 的所有子域名。配置后，仅匹配正则表达式的域名会被允许， timing_allow_origins 的配置将被忽略。"
+      }
+    },
+    "examples": [
+      {
+        "title": "为路由启用 CORS",
+        "anchor": "为路由启用-cors"
+      },
+      {
+        "title": "使用正则表达式匹配 Origin",
+        "anchor": "使用正则表达式匹配-origin"
+      },
+      {
+        "title": "在插件元数据中配置 Origin",
+        "anchor": "在插件元数据中配置-origin"
+      }
+    ]
+  },
+  "uri-blocker": {
+    "overview": [
+      "uri-blocker 插件通过指定一系列 block_rules 来拦截用户请求。"
+    ],
+    "fields": {
+      "route": {
+        "block_rules": "正则过滤数组。它们都是正则规则，如果当前请求 URI 命中其中任何一个，则将响应代码设置为 rejected_code 以退出当前用户请求。例如： [\"root.exe\", \"root.m+\"] 。",
+        "rejected_code": "当请求 URI 命中 block_rules 中的任何一个时，将返回的 HTTP 状态代码。",
+        "rejected_msg": "当请求 URI 命中 block_rules 中的任何一个时，将返回的 HTTP 响应体。",
+        "case_insensitive": "是否忽略大小写。当设置为 true 时，在匹配请求 URI 时将忽略大小写。"
+      }
+    },
+    "examples": []
+  },
+  "ip-restriction": {
+    "overview": [
+      "ip-restriction 插件支持通过配置 IP 地址白名单或黑名单来限制 IP 地址对上游资源的访问。限制 IP 对资源的访问有助于防止未经授权的访问并加强 API 安全性。"
+    ],
+    "fields": {
+      "route": {
+        "whitelist": "允许访问的 IP 或 CIDR 范围列表。 whitelist 和 blacklist 必须且只能配置其中一个。",
+        "blacklist": "拒绝访问的 IP 或 CIDR 范围列表。 whitelist 和 blacklist 必须且只能配置其中一个。",
+        "message": "IP 被拒绝时返回给客户端的消息。",
+        "response_code": "因 IP 地址限制而拒绝请求时返回的 HTTP 响应码。"
+      }
+    },
+    "examples": [
+      {
+        "title": "通过白名单限制访问",
+        "anchor": "通过白名单限制访问"
+      },
+      {
+        "title": "使用修改后的 IP 限制访问",
+        "anchor": "使用修改后的-ip-限制访问"
+      }
+    ]
+  },
+  "ua-restriction": {
+    "overview": [
+      "ua-restriction 插件支持通过配置用户代理的允许列表或拒绝列表来限制对上游资源的访问。一个常见的用例是防止网络爬虫使上游资源过载并导致服务降级。"
+    ],
+    "fields": {
+      "route": {
+        "bypass_missing": "如果为 true ，则在缺少 User-Agent 请求头时绕过用户代理限制检查。",
+        "allowlist": "允许的用户代理列表（支持正则表达式）。 allowlist 和 denylist 必须且只能配置其中一个。",
+        "denylist": "拒绝的用户代理列表（支持正则表达式）。 allowlist 和 denylist 必须且只能配置其中一个。",
+        "message": "当用户代理被拒绝访问时返回给客户端的消息。"
+      }
+    },
+    "examples": [
+      {
+        "title": "拒绝网络爬虫并自定义错误消息",
+        "anchor": "拒绝网络爬虫并自定义错误消息"
+      },
+      {
+        "title": "绕过 UA 限制检查",
+        "anchor": "绕过-ua-限制检查"
+      }
+    ]
+  },
+  "referer-restriction": {
+    "overview": [
+      "referer-restriction 插件允许用户将 Referer 请求头中的域名列入白名单或黑名单来限制该域名对服务或路由的访问。"
+    ],
+    "fields": {
+      "route": {
+        "whitelist": "白名单域名列表。域名开头可以用 * 作为通配符。",
+        "blacklist": "黑名单域名列表。域名开头可以用 * 作为通配符。",
+        "message": "在未允许访问的情况下返回的信息。",
+        "bypass_missing": "当设置为 true 时，如果 Referer 请求头不存在或格式有误，将绕过检查。"
+      }
+    },
+    "examples": []
+  },
+  "consumer-restriction": {
+    "overview": [
+      "consumer-restriction 插件基于消费者名称、路由 ID、服务 ID 或消费者组 ID 实现访问控制。",
+      "该插件需要与认证插件配合使用，例如 key-auth 和 jwt-auth ，这意味着在使用场景中至少需要创建一个 消费者 。详情请参见下方示例。"
+    ],
+    "fields": {
+      "route": {
+        "type": "限制的依据。决定对白名单或黑名单检查哪个值。",
+        "whitelist": "允许访问的值列表。 whitelist 、 blacklist 和 allowed_by_methods 中至少需要配置一个。",
+        "blacklist": "拒绝访问的值列表。 whitelist 、 blacklist 和 allowed_by_methods 中至少需要配置一个。",
+        "allowed_by_methods": "指定每个消费者允许的 HTTP 方法的对象列表。 whitelist 、 blacklist 和 allowed_by_methods 中至少需要配置一个。",
+        "allowed_by_methods[].user": "消费者名称。",
+        "allowed_by_methods[].methods": "该消费者允许的 HTTP 方法列表。",
+        "rejected_code": "请求被拒绝时返回的 HTTP 状态码。",
+        "rejected_msg": "请求被拒绝时返回给客户端的消息。"
+      }
+    },
+    "examples": [
+      {
+        "title": "通过消费者名称限制访问",
+        "anchor": "通过消费者名称限制访问"
+      },
+      {
+        "title": "通过消费者名称和 HTTP 方法限制访问",
+        "anchor": "通过消费者名称和-http-方法限制访问"
+      },
+      {
+        "title": "通过服务 ID 限制访问",
+        "anchor": "通过服务-id-限制访问"
+      }
+    ]
+  },
+  "csrf": {
+    "overview": [
+      "csrf 插件基于 Double Submit Cookie 的方式，保护用户的 API 免于 CSRF 攻击。",
+      "在此插件运行时， GET 、 HEAD 和 OPTIONS 会被定义为 safe-methods ，其他的请求方法则定义为 unsafe-methods 。因此 GET 、 HEAD 和 OPTIONS 方法的调用不会被检查拦截。"
+    ],
+    "fields": {
+      "route": {
+        "name": "生成的 Cookie 中的 Token 名称，需要使用此名称在请求头携带 Cookie 中的内容。",
+        "expires": "CSRF Cookie 的过期时间，单位为秒。当设置为 0 时，会忽略 CSRF Cookie 过期时间检查。",
+        "key": "加密 Token 的密钥。"
+      }
+    },
+    "examples": []
+  },
+  "chaitin-waf": {
+    "overview": [
+      "chaitin-waf 插件与长亭雷池 WAF 集成服务集成，提供对基于 Web 的威胁的高级检测和预防，增强应用程序安全性并保护敏感的用户数据。"
+    ],
+    "fields": {
+      "route": {
+        "mode": "用于决定插件在匹配请求时的行为模式。在 off 模式下，跳过 WAF 检查。在 monitor 模式下，记录潜在威胁请求但不拦截。在 block 模式下，根据 WAF 服务的判断拦截存在威胁的请求。",
+        "match": "匹配规则数组。插件使用这些规则来决定是否对请求执行 WAF 检查。如果列表为空，则处理所有请求。",
+        "match.vars": "一个或多个匹配条件数组，使用 lua-resty-expr 表达式来有条件地执行插件。",
+        "append_waf_resp_header": "若为 true，则在响应中添加 X-APISIX-CHAITIN-WAF 、 X-APISIX-CHAITIN-WAF-TIME 、 X-APISIX-CHAITIN-WAF-ACTION 和 X-APISIX-CHAITIN-WAF-STATUS 响应头。",
+        "append_waf_debug_header": "若为 true，则在响应中添加调试用响应头 X-APISIX-CHAITIN-WAF-ERROR 和 X-APISIX-CHAITIN-WAF-SERVER 。仅当 append_waf_resp_header 为 true 时生效。",
+        "config": "长亭 WAF 服务配置。这些配置在指定时会覆盖对应的元数据默认值。",
+        "config.connect_timeout": "与 WAF 服务的连接超时时间，单位为毫秒。",
+        "config.send_timeout": "向 WAF 服务发送数据的超时时间，单位为毫秒。",
+        "config.read_timeout": "从 WAF 服务读取数据的超时时间，单位为毫秒。",
+        "config.req_body_size": "允许的最大请求体大小，单位为 KB。",
+        "config.keepalive_size": "可同时维持的与 WAF 检测服务的空闲连接数上限。",
+        "config.keepalive_timeout": "与 WAF 服务的空闲连接超时时间，单位为毫秒。",
+        "config.real_client_ip": "若为 true，则插件将 APISIX 解析得到的客户端 IP（与 APISIX 其他地方使用的相同，由连接信息以及 apisix.trusted_addresses 共同决定）发送给 WAF 服务。若为 false，则插件发送与 APISIX 直接建立连接的对端 IP。",
+        "config.log_resp": "若为 true，则插件同时将响应上报给 WAF 服务。参见 响应上报 。",
+        "config.resp_body_size": "上报的响应体大小，单位为 KB。设置为 0 表示仅上报状态行与响应头。仅当 config.log_resp 为 true 时生效。",
+        "config.extra_ignored_content_types": "以逗号分隔的响应 Content-Type 列表，在内置忽略列表之外额外跳过这些类型。仅当 config.log_resp 为 true 时生效。"
+      }
+    },
+    "examples": [
+      {
+        "title": "拦截路由上的恶意请求",
+        "anchor": "拦截路由上的恶意请求"
+      },
+      {
+        "title": "监控恶意请求",
+        "anchor": "监控恶意请求"
+      }
+    ]
+  },
+  "oas-validator": {
+    "overview": [
+      "oas-validator 插件在请求转发至上游服务之前，根据 OpenAPI Specification（OAS）3.x 文档对入站 HTTP 请求进行校验。可校验内容包括请求方法、路径、查询参数、请求头以及请求体。",
+      "OpenAPI 规范可以以内联 JSON 字符串的形式提供，也可以从远程 URL 获取并配置缓存。校验失败时返回可配置的 HTTP 错误状态码，并可选择在响应体中包含详细的错误信息。"
+    ],
+    "fields": {
+      "route": {
+        "spec": "内联 OpenAPI 3.x 规范（JSON 格式）。未设置 spec_url 时必填。",
+        "spec_url": "获取 OpenAPI 规范的 URL。未设置 spec 时必填。",
+        "spec_url_request_headers": "获取 spec_url 时附带的自定义 HTTP 请求头，适用于需要鉴权的规范接口。",
+        "ssl_verify": "获取 spec_url 时是否校验 TLS 证书。",
+        "timeout": "获取 spec_url 的 HTTP 请求超时时间（毫秒）。",
+        "verbose_errors": "为 true 时，在响应体中返回详细的校验错误信息。",
+        "skip_request_body_validation": "跳过请求体校验。",
+        "skip_request_header_validation": "跳过请求头校验。",
+        "skip_query_param_validation": "跳过查询参数校验。",
+        "skip_path_params_validation": "跳过路径参数校验。",
+        "reject_if_not_match": "为 true 时，拒绝校验失败的请求；为 false 时，仅记录校验失败日志并放行请求。",
+        "rejection_status_code": "请求校验失败时返回的 HTTP 状态码。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用内联规范校验请求",
+        "anchor": "使用内联规范校验请求"
+      },
+      {
+        "title": "使用远程规范 URL 校验请求",
+        "anchor": "使用远程规范-url-校验请求"
+      }
+    ]
+  },
+  "ocsp-stapling": {
+    "overview": [
+      "ocsp-stapling 插件可以动态地设置 Nginx 中 OCSP stapling 的相关行为。"
+    ],
+    "fields": {
+      "route": {
+        "enabled": "与 ssl_stapling 指令类似，用于启用或禁用 OCSP stapling 特性",
+        "skip_verify": "与 ssl_stapling_verify 指令类似，用于启用或禁用对于 OCSP 响应结果的校验",
+        "cache_ttl": "指定 OCSP 响应结果的缓存时间"
+      }
+    },
+    "examples": []
+  },
+  "public-api": {
+    "overview": [
+      "public-api 插件公开了一个内部 API 端点，使其可被公开访问。该插件的主要用途之一是公开由其他插件创建的内部端点。"
+    ],
+    "fields": {
+      "route": {
+        "uri": "内部端点的 URI。如果未配置，则暴露路由的 URI。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在自定义端点暴露 Prometheus 指标",
+        "anchor": "在自定义端点暴露-prometheus-指标"
+      },
+      {
+        "title": "暴露批量请求端点",
+        "anchor": "暴露批量请求端点"
+      }
+    ]
+  },
+  "ai-proxy": {
+    "overview": [
+      "ai-proxy 插件通过将插件配置转换为指定的请求格式，简化了对 LLM 和嵌入模型的访问。它支持与 OpenAI、DeepSeek、Azure、AIMLAPI、Anthropic、OpenRouter、Gemini、Vertex AI、Amazon Bedrock 和其他 OpenAI 兼容的 API 集成。",
+      "此外，该插件还支持在访问日志中记录 LLM 请求信息，如令牌使用量、模型、首次响应时间等。这些日志条目也会被 http-logger 、 kafka-logger 等日志插件消费。这些选项不影响 error.log 。"
+    ],
+    "fields": {
+      "route": {
+        "messages": "消息对象数组。",
+        "messages.role": "消息的角色（ system 、 user 、 assistant ）。",
+        "messages.content": "消息的内容。",
+        "system": "可选的系统提示块（例如 [{\"text\": \"You are a helpful assistant.\"}] ）。",
+        "inferenceConfig": "可选的推理参数，如 maxTokens 、 temperature 、 topP 等。",
+        "stream": "设置为 true 时，插件会将请求代理到 Bedrock 的 ConverseStream 接口，并以 AWS EventStream 二进制帧（ application/vnd.amazon.eventstream ）转发响应。该字段由插件消费，不会转发给 Bedrock。",
+        "provider": "LLM 服务提供商。当设置为 openai 时，插件将代理请求到 https://api.openai.com/chat/completions 。当设置为 deepseek 时，插件将代理请求到 https://api.deepseek.com/chat/completions 。当设置为 aimlapi 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 https://api.aimlapi.com/v1/chat/completions 。当设置为 anthropic 时，插件将代理请求到 https://api.anthropic.com/v1/chat/completions 。当设置为 openrouter 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 https://openrouter.ai/api/v1/chat/completions 。当设置为 gemini 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 https://generativelanguage.googleapis.com/v1beta/openai/chat/completions 。当设置为 vertex-ai 时，插件默认将请求代理到 https://aiplatform.googleapis.com ，需要配置 provider_conf 或 override 。当设置为 bedrock 时，插件将代理请求到 AWS Bedrock Converse API（ https://bedrock-runtime.<region>.amazonaws.com ），并使用 AWS SigV4 对请求进行签名。当设置为 openai-compatible 时，插件将代理请求到在 override 中配置的自定义端点。当设置为 azure-openai 时，插件同样将请求代理到 override 中配置的自定义端点，并会额外移除用户请求中的 model 参数。",
+        "provider_conf": "特定提供商的配置。当 provider 设置为 vertex-ai 且未配置 override 时必填。当 provider 设置为 bedrock 时必填。",
+        "provider_conf.project_id": "Google Cloud 项目 ID。",
+        "provider_conf.region": "当 provider 为 vertex-ai 时，此项为 Google Cloud 区域。当 provider 为 bedrock 时，此项为用于构造 Bedrock 端点并使用 SigV4 对请求进行签名的 AWS 区域（必填，不能为空）。",
+        "auth": "身份验证配置。",
+        "auth.header": "身份验证标头。必须配置 header 或 query 中的至少一个。",
+        "auth.query": "身份验证查询参数。必须配置 header 或 query 中的至少一个。",
+        "auth.gcp": "Google Cloud Platform (GCP) 身份验证配置。",
+        "auth.gcp.service_account_json": "GCP 服务账号 JSON 文件内容。也可以通过设置 GCP_SERVICE_ACCOUNT 环境变量来配置。",
+        "auth.gcp.max_ttl": "GCP 访问令牌缓存的最大 TTL（秒）。",
+        "auth.gcp.expire_early_secs": "在访问令牌实际过期之前提前过期的秒数，以避免边缘情况。",
+        "auth.aws": "AWS 身份验证配置。当 provider 为 bedrock 时必填。",
+        "auth.aws.access_key_id": "用于 SigV4 签名的 AWS 访问密钥 ID。",
+        "auth.aws.secret_access_key": "用于 SigV4 签名的 AWS 秘密访问密钥。以加密形式存储。",
+        "auth.aws.session_token": "可选的 AWS 会话令牌，用于临时凭证（例如来自 STS 或扮演角色获取的凭证）。以加密形式存储。",
+        "options": "模型配置。除了 model 之外，你还可以配置其他参数，它们将在请求体中转发到上游 LLM 服务。例如，如果你使用 OpenAI，可以配置其他参数，如 temperature 、 top_p 和 stream 。有关更多可用选项，请参阅你的 LLM 提供商的 API 文档。",
+        "options.model": "LLM 模型的名称，如 gpt-4 或 gpt-3.5 。请参阅 LLM 提供商的 API 文档以了解可用模型。当 provider 为 bedrock 且未配置 override.endpoint 时， model 为必填项，可以是基础模型 ID（例如 anthropic.claude-3-5-sonnet-20240620-v1:0 ）、跨区域推理配置文件 ID（例如 us.anthropic.claude-3-5-sonnet-20240620-v1:0 ）或应用推理配置文件 ARN（例如 arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123 ）。",
+        "override": "覆盖设置。",
+        "override.endpoint": "自定义 LLM 提供商端点，当 provider 为 openai-compatible 时必需。当 provider 为 bedrock 时，可以设置为自定义的 Bedrock 端点。如果覆盖 URL 包含含有保留字符的路径（例如 Bedrock 推理配置文件 ARN 中的 : 或 / ），这些字符必须进行 URL 编码（ : → %3A ， / → %2F ），以确保模型 ID 被保留为单个路径段。",
+        "override.llm_options": "提供商感知的 LLM 选项。请参阅 max_tokens 字段映射 。",
+        "override.llm_options.max_tokens": "最大输出 token 数。APISIX 会自动将该值映射为各上游服务商对应的字段名（例如 OpenAI Chat Completions 使用 max_completion_tokens 、OpenAI Responses API 使用 max_output_tokens 、其他大多数服务商使用 max_tokens ）。始终强制覆盖客户端值。",
+        "override.request_body": "按目标协议的请求体覆盖配置。键为目标协议名（ openai-chat 、 openai-responses 、 openai-embeddings 、 anthropic-messages 、 bedrock-converse ），值为部分请求体，将深度合并到出站请求体中（对象递归合并，数组和标量整体替换）。请参阅 按协议的请求体覆盖 。",
+        "override.request_body_force_override": "为 false （默认）时，客户端请求体中的字段优先， override.request_body 仅补充缺失字段。为 true 时， override.request_body 的值强制覆盖客户端请求体中的同名字段。不影响 override.llm_options ，后者始终强制覆盖。",
+        "logging": "日志配置。不影响 error.log 。",
+        "logging.summaries": "如果为 true，记录请求 LLM 模型、持续时间、请求和响应令牌。",
+        "logging.payloads": "如果为 true，记录请求和响应负载。",
+        "timeout": "请求 LLM 服务时的请求超时时间（毫秒）。按单次 socket 操作（连接 / 发送 / 读取数据块）计算，不限制流式响应的总时长。",
+        "max_stream_duration_ms": "流式 AI 响应的最大墙钟时长（毫秒）。如果上游在该截止时间后仍持续发送数据，网关会关闭连接。不设置表示不限制。用于防止上游异常无限产出 token。当在流式过程中触发该限制时，下游 SSE 流会被截断（不会发送 [DONE] 、 message_stop 、 response.completed 等协议终止标记）；行为正常的客户端应将缺少终止标记视为不完整的响应。",
+        "max_response_bytes": "单次 AI 响应（流式或非流式）从上游读取的最大总字节数。超过则网关关闭连接。对于带 Content-Length 的非流式响应，在读取响应体前进行检查；对于分块（无 Content-Length ）的非流式响应以及流式响应，则在接收字节的过程中增量地强制执行该上限。不设置表示不限制。",
+        "keepalive": "如果为 true，在请求 LLM 服务时保持连接活跃。",
+        "keepalive_timeout": "连接到 LLM 服务时的保活超时时间（毫秒）。",
+        "keepalive_pool": "LLM 服务连接的保活池大小。",
+        "ssl_verify": "如果为 true，验证 LLM 服务的证书。",
+        "streaming_flush_interval_ms": "后台刷新线程的间隔时间（毫秒）。 > 0 （默认值： 10 ）时，后台定时器每隔 N 毫秒调用一次 ngx.flush(false) ，适合上游批量发送 token 的场景。对于 SSE 流，只有已排队发给客户端的完整帧或转换后的事件才会触发刷新；不完整的帧会等待后续上游数据。定时刷新若返回 nothing to flush ，会继续处理流式响应。设为 0 时禁用后台线程，改为每个 chunk 同步调用 ngx.flush(true) 立即刷新。"
+      }
+    },
+    "examples": [
+      {
+        "title": "代理到 OpenAI",
+        "anchor": "代理到-openai"
+      },
+      {
+        "title": "代理到 DeepSeek",
+        "anchor": "代理到-deepseek"
+      },
+      {
+        "title": "代理到 Azure OpenAI",
+        "anchor": "代理到-azure-openai"
+      },
+      {
+        "title": "代理到 Amazon Bedrock",
+        "anchor": "代理到-amazon-bedrock"
+      },
+      {
+        "title": "代理到 OpenAI 嵌入模型",
+        "anchor": "代理到-openai-嵌入模型"
+      },
+      {
+        "title": "代理到 Anthropic",
+        "anchor": "代理到-anthropic"
+      },
+      {
+        "title": "将 Anthropic 请求转换为 OpenAI 兼容后端",
+        "anchor": "将-anthropic-请求转换为-openai-兼容后端"
+      },
+      {
+        "title": "使用请求体参数代理到选定模型",
+        "anchor": "使用请求体参数代理到选定模型"
+      },
+      {
+        "title": "发送请求日志到日志记录器",
+        "anchor": "发送请求日志到日志记录器"
+      },
+      {
+        "title": "在访问日志中包含 LLM 信息",
+        "anchor": "在访问日志中包含-llm-信息"
+      }
+    ]
+  },
+  "ai-proxy-multi": {
+    "overview": [
+      "ai-proxy-multi 插件通过将插件配置转换为 OpenAI、DeepSeek、Azure、AIMLAPI、Anthropic、OpenRouter、Gemini、Vertex AI、Amazon Bedrock 和其他 OpenAI 兼容 API 的指定请求格式，简化了对 LLM 和嵌入模型的访问。它通过负载均衡、重试、故障转移和健康检查扩展了 ai-proxy 的功能。",
+      "此外，该插件还支持在访问日志中记录 LLM 请求信息，如令牌使用量、模型、首次响应时间等。这些日志条目也会被 http-logger 、 kafka-logger 等日志插件消费，但不影响 error.log 。"
+    ],
+    "fields": {
+      "route": {
+        "messages": "消息对象数组。",
+        "messages.role": "消息的角色（ system 、 user 、 assistant ）。",
+        "messages.content": "消息的内容。",
+        "system": "可选的系统提示块（例如 [{\"text\": \"You are a helpful assistant.\"}] ）。",
+        "inferenceConfig": "可选的推理参数，如 maxTokens 、 temperature 、 topP 等。",
+        "stream": "设置为 true 时，插件会将请求代理到 Bedrock 的 ConverseStream 接口，并以 AWS EventStream 二进制帧（ application/vnd.amazon.eventstream ）转发响应。该字段由插件消费，不会转发给 Bedrock。",
+        "fallback_strategy": "故障转移策略。设置后，插件将在转发请求时检查指定实例的令牌是否已耗尽。如果是，则无论实例优先级如何，都将请求转发到下一个实例。未设置时，当高优先级实例的令牌耗尽时，插件不会将请求转发到低优先级实例。",
+        "fallback_http_statuses": "除 fallback_strategy 中的 http_429 和 http_5xx 之外，额外触发故障转移到其他实例的上游 HTTP 状态码。适用于表示该实例凭证不可用（而非请求本身有问题）的状态码，例如 API Key 过期或额度耗尽时的 [401, 402] 。该能力按状态码显式启用，因为大多数 4xx 响应由请求本身导致，在其他实例上重试只会白白消耗额度。 max_retries 和 retry_on_failure_within_ms 对这些重试的约束方式与对 fallback_strategy 的重试一致。",
+        "max_retries": "初始请求失败后允许的最大故障转移重试次数。用于限制单个请求最多尝试多少个额外实例，避免穷举所有已配置的实例。仅在配置 fallback_strategy 或 fallback_http_statuses 时生效。未设置时，插件会持续重试直到某个实例成功或所有实例都已尝试。",
+        "retry_on_failure_within_ms": "仅当上游在指定毫秒数内失败时才故障转移到其他实例。快速失败（如连接错误、快速返回的 429 / 5xx ）会触发重试，而耗时超过该值的慢失败会直接将错误返回给客户端，避免客户端等待时间翻倍。仅在配置 fallback_strategy 或 fallback_http_statuses 时生效。未设置时，插件无论失败请求耗时多久都会重试。",
+        "balancer": "负载均衡配置。",
+        "balancer.algorithm": "负载均衡算法。设置为 roundrobin 时，使用加权轮询算法。设置为 chash 时，使用一致性哈希算法。设置为 semantic 时，插件根据请求提示词与各实例 examples 之间的语义相似度选择实例，其相关选项配置在 semantic_opts 下。注意： semantic 不参与健康检查，也不参与 fallback_strategy / 重试——被选中实例的上游失败会直接返回给客户端；只有当没有实例达到其阈值或嵌入请求失败时，才会回退（回退到 semantic_opts.fallback 实例，若未配置则回退到第一个实例）。",
+        "balancer.hash_on": "当 type 为 chash 时使用。支持基于 NGINX 变量 、标头、cookie、消费者或 NGINX 变量 组合进行哈希。",
+        "balancer.key": "当 type 为 chash 时使用。当 hash_on 设置为 header 或 cookie 时，需要 key 。当 hash_on 设置为 consumer 时，不需要 key ，因为消费者名称将自动用作键。",
+        "instances": "LLM 实例配置。",
+        "instances.name": "LLM 服务实例的名称。该名称在 instances 中必须唯一，因为负载均衡、健康检查以及 ai-rate-limiting 等引用该实例的插件都以它作为实例标识。",
+        "instances.provider": "LLM 服务提供商。设置为 openai 时，插件将代理请求到 api.openai.com 。设置为 deepseek 时，插件将代理请求到 api.deepseek.com 。设置为 aimlapi 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 api.aimlapi.com 。设置为 anthropic 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 api.anthropic.com 。设置为 openrouter 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 openrouter.ai 。设置为 gemini 时，插件使用 OpenAI 兼容驱动程序，默认将请求代理到 generativelanguage.googleapis.com 。设置为 vertex-ai 时，插件默认将请求代理到 aiplatform.googleapis.com ，且需要配置 provider_conf 或 override 。设置为 bedrock 时，插件将代理请求到 AWS Bedrock Converse API（ bedrock-runtime.<region>.amazonaws.com ），并使用 AWS SigV4 对请求进行签名。设置为 openai-compatible 时，插件将代理请求到在 override 中配置的自定义端点。",
+        "instances.provider_conf": "特定提供商的配置。当 provider 设置为 vertex-ai 且未配置 override 时必填。当 provider 设置为 bedrock 时必填。",
+        "instances.provider_conf.project_id": "Google Cloud 项目 ID。",
+        "instances.provider_conf.region": "当 provider 为 vertex-ai 时，此项为 Google Cloud 区域。当 provider 为 bedrock 时，此项为用于构造 Bedrock 端点并使用 SigV4 对请求进行签名的 AWS 区域（必填，不能为空）。",
+        "instances.priority": "LLM 实例在负载均衡中的优先级。 priority 优先于 weight 。",
+        "instances.weight": "LLM 实例在负载均衡中的权重。",
+        "instances.auth": "身份验证配置。",
+        "instances.auth.header": "身份验证标头。应配置 header 和 query 中的至少一个。",
+        "instances.auth.query": "身份验证查询参数。应配置 header 和 query 中的至少一个。",
+        "instances.auth.gcp": "Google Cloud Platform (GCP) 身份验证配置。",
+        "instances.auth.gcp.service_account_json": "GCP 服务帐户 JSON 文件的内容。也可以通过设置”GCP_SERVICE_ACCOUNT”环境变量来配置。",
+        "instances.auth.gcp.max_ttl": "用于缓存 GCP 访问令牌的最大 TTL（以秒为单位）。",
+        "instances.auth.gcp.expire_early_secs": "在访问令牌实际过期时间之前使其过期的秒数，以避免边缘情况。",
+        "instances.auth.aws": "AWS 身份验证配置。当 provider 为 bedrock 时必填。",
+        "instances.auth.aws.access_key_id": "用于 SigV4 签名的 AWS 访问密钥 ID。",
+        "instances.auth.aws.secret_access_key": "用于 SigV4 签名的 AWS 秘密访问密钥。以加密形式存储。",
+        "instances.auth.aws.session_token": "可选的 AWS 会话令牌，用于临时凭证（例如来自 STS 或扮演角色获取的凭证）。以加密形式存储。",
+        "instances.options": "模型配置。除了 model 之外，您还可以配置其他参数，它们将在请求体中转发到上游 LLM 服务。例如，如果您使用 OpenAI、DeepSeek 或 AIMLAPI，可以配置其他参数，如 max_tokens 、 temperature 、 top_p 和 stream 。有关更多可用选项，请参阅您的 LLM 提供商的 API 文档。",
+        "instances.options.model": "LLM 模型的名称，如 gpt-4 或 gpt-3.5 。有关更多可用模型，请参阅您的 LLM 提供商的 API 文档。当 provider 为 bedrock 且未配置 override.endpoint 时， model 为必填项，可以是基础模型 ID（例如 anthropic.claude-3-5-sonnet-20240620-v1:0 ）、跨区域推理配置文件 ID（例如 us.anthropic.claude-3-5-sonnet-20240620-v1:0 ）或应用推理配置文件 ARN（例如 arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123 ）。",
+        "instances.override": "覆盖设置。",
+        "instances.override.endpoint": "用于替换默认端点的 LLM 提供商端点。如果未配置，插件使用默认的 OpenAI 端点 https://api.openai.com/v1/chat/completions 。当 provider 为 bedrock 时，可以设置为自定义的 Bedrock 端点。如果覆盖 URL 包含含有保留字符的路径（例如 Bedrock 推理配置文件 ARN 中的 : 或 / ），这些字符必须进行 URL 编码（ : → %3A ， / → %2F ），以确保模型 ID 被保留为单个路径段。",
+        "instances.override.llm_options": "提供商感知的 LLM 选项。请参阅 ai-proxy 文档中的 max_tokens 字段映射 。",
+        "instances.override.llm_options.max_tokens": "最大输出 token 数。APISIX 会自动将该值映射为各上游服务商对应的字段名。始终强制覆盖客户端值。",
+        "instances.override.request_body": "按目标协议的请求体覆盖配置。请参阅 ai-proxy 文档中的 按协议的请求体覆盖 。",
+        "instances.override.request_body_force_override": "为 false （默认）时，客户端请求体中的字段优先， instances.override.request_body 仅补充缺失字段。为 true 时， instances.override.request_body 的值强制覆盖客户端请求体中的同名字段。不影响 instances.override.llm_options 。",
+        "instances.examples": "当 algorithm 为 semantic 时使用。代表该实例意图的示例语句；每一条都会被嵌入为独立的参考向量。当 algorithm 为 semantic 时每个实例都必填，包括被 semantic_opts.fallback 指定的实例。",
+        "instances.threshold": "当 algorithm 为 semantic 时使用。该实例的最小余弦相似度，覆盖 semantic_opts.threshold 。",
+        "logging": "日志配置。不影响 error.log 。",
+        "logging.summaries": "如果为 true，记录请求 LLM 模型、持续时间、请求和响应令牌。",
+        "logging.payloads": "如果为 true，记录请求和响应负载。",
+        "instances.checks": "健康检查配置。请注意，目前 OpenAI、DeepSeek 和 AIMLAPI 不提供官方健康检查端点。您可以在 openai-compatible 提供商下配置的其他 LLM 服务可能有可用的健康检查端点。",
+        "instances.checks.active": "主动健康检查配置。",
+        "instances.checks.active.type": "健康检查连接类型。",
+        "instances.checks.active.timeout": "健康检查超时时间（秒）。",
+        "instances.checks.active.concurrency": "同时检查的上游节点数量。",
+        "instances.checks.active.host": "HTTP 主机。",
+        "instances.checks.active.port": "HTTP 端口。",
+        "instances.checks.active.http_path": "HTTP 探测请求的路径。",
+        "instances.checks.active.https_verify_certificate": "如果为 true，验证节点的 TLS 证书。",
+        "instances.checks.active.healthy": "健康检查配置。",
+        "instances.checks.active.healthy.interval": "检查健康节点的时间间隔（秒）。",
+        "instances.checks.active.healthy.http_statuses": "定义健康节点的 HTTP 状态码数组。",
+        "instances.checks.active.healthy.successes": "定义健康节点所需的成功探测次数。",
+        "instances.checks.active.unhealthy": "不健康检查配置。",
+        "instances.checks.active.unhealthy.interval": "检查不健康节点的时间间隔（秒）。",
+        "instances.checks.active.unhealthy.http_statuses": "定义不健康节点的 HTTP 状态码数组。",
+        "instances.checks.active.unhealthy.http_failures": "定义不健康节点的 HTTP 失败次数。",
+        "instances.checks.active.unhealthy.timeout": "定义不健康节点的探测超时次数。",
+        "semantic_opts": "semantic 均衡器的选项，集中配置在一处。当 balancer.algorithm 为 semantic 时必填。",
+        "semantic_opts.threshold": "实例被选中所需达到的全局最小余弦相似度。 默认值 0 几乎会接纳任何提示词 （真实嵌入向量很少会不相似到得分低于 0），因此只有把它调到 0 以上，回退实例才会真正生效。当没有实例达到其阈值时，请求回退到 fallback 实例；若未指定，则回退到第一个实例。",
+        "semantic_opts.fallback": "当没有实例达到其阈值或嵌入请求失败时，路由到的实例名称。它本身也是一个参与排名的普通实例，同样需要配置 examples 。未设置时默认回退到第一个实例。",
+        "semantic_opts.debugging": "若为 true，通过 X-AI-Semantic-Scores 和 X-AI-Semantic-Picked-Instance 响应头暴露各实例的分数和路由决策，用于调试。",
+        "semantic_opts.embeddings": "嵌入服务配置，用于将提示词与各实例的 examples 进行相似度打分。",
+        "semantic_opts.embeddings.provider": "语义算法使用的嵌入服务提供商。",
+        "semantic_opts.embeddings.model": "嵌入模型名称，例如 text-embedding-3-small 。",
+        "semantic_opts.embeddings.endpoint": "嵌入 API 端点。对于 openai 可选（默认使用公共 API）。对于 azure-openai 必填，且必须是 完整 URL，包含 deployment 路径和 API 版本，例如 https://{resource}.openai.azure.com/openai/deployments/{deployment}/embeddings?api-version=2024-02-01 。",
+        "semantic_opts.embeddings.auth": "嵌入服务的认证配置。",
+        "semantic_opts.embeddings.auth.header": "认证请求头。加密存储。",
+        "semantic_opts.embeddings.auth.query": "认证查询参数。加密存储。",
+        "semantic_opts.embeddings.timeout": "嵌入请求的超时时间（毫秒）。每个请求都会同步嵌入查询提示词，因此该值限定了当嵌入端点变慢或不可用时每个请求增加的延迟上限（随后请求会 fail-open 到回退实例）。",
+        "semantic_opts.embeddings.ssl_verify": "如果为 true，验证嵌入服务的证书。",
+        "timeout": "请求 LLM 服务时的请求超时时间（毫秒）。应用于单次 socket 操作（连接 / 发送 / 读取块），不限制流式响应的总时长。",
+        "max_stream_duration_ms": "流式 AI 响应的总墙钟时长上限（毫秒）。若上游在此时间后仍持续发送数据，网关将关闭连接。未设置时不限制。用于防护上游持续输出 token 导致网关 CPU 被打满的异常情况。中途触发上限时，下游 SSE 流会被截断（不再发送协议特定的终止标记，例如 [DONE] 、 message_stop 或 response.completed ），客户端应将缺失的终止标记视为响应未完成。",
+        "max_response_bytes": "单次 AI 响应（流式或非流式）允许从上游读取的最大总字节数。超出时关闭连接。非流式响应若存在 Content-Length ，在读取 body 之前预检；否则（chunked 传输）与流式响应一样在接收字节的过程中增量检查。未设置时不限制。",
+        "keepalive": "如果为 true，在请求 LLM 服务时保持连接活跃。",
+        "keepalive_timeout": "请求 LLM 服务时的请求超时时间（毫秒）。",
+        "keepalive_pool": "连接 LLM 服务时的保活池大小。",
+        "ssl_verify": "如果为 true，验证 LLM 服务的证书。"
+      }
+    },
+    "examples": [
+      {
+        "title": "实例间负载均衡",
+        "anchor": "实例间负载均衡"
+      },
+      {
+        "title": "配置实例优先级和速率限制",
+        "anchor": "配置实例优先级和速率限制"
+      },
+      {
+        "title": "按消费者进行负载均衡和速率限制",
+        "anchor": "按消费者进行负载均衡和速率限制"
+      },
+      {
+        "title": "限制完成令牌的最大数量",
+        "anchor": "限制完成令牌的最大数量"
+      },
+      {
+        "title": "在 Amazon Bedrock 实例之间进行负载均衡",
+        "anchor": "在-amazon-bedrock-实例之间进行负载均衡"
+      },
+      {
+        "title": "代理到嵌入模型",
+        "anchor": "代理到嵌入模型"
+      },
+      {
+        "title": "启用主动健康检查",
+        "anchor": "启用主动健康检查"
+      },
+      {
+        "title": "发送请求日志到日志记录器",
+        "anchor": "发送请求日志到日志记录器"
+      },
+      {
+        "title": "在访问日志中包含 LLM 信息",
+        "anchor": "在访问日志中包含-llm-信息"
+      },
+      {
+        "title": "按语义相似度路由",
+        "anchor": "按语义相似度路由"
+      }
+    ]
+  },
+  "ai-request-rewrite": {
+    "overview": [
+      "ai-request-rewrite 插件在将客户端请求转发到上游服务之前，先将请求发送到 LLM 服务进行转换处理。这使得 LLM 能够对请求进行数据脱敏、内容增强或格式转换等修改。该插件支持集成 OpenAI、DeepSeek、Gemini、Vertex AI、Anthropic、OpenRouter 以及其他 OpenAI 兼容的 API。"
+    ],
+    "fields": {
+      "route": {
+        "prompt": "发送到 LLM 服务用于重写客户端请求的提示词。",
+        "provider": "LLM 服务提供商。设置为 aimlapi 时，插件使用 OpenAI 兼容驱动并将请求代理到 https://api.aimlapi.com/v1/chat/completions 。设置为 openai-compatible 时，插件将请求代理到 override 中配置的自定义端点。设置为 azure-openai 时，插件同样将请求代理到 override 中配置的自定义端点，并会额外移除用户请求中的 model 参数。",
+        "auth": "身份验证配置。",
+        "auth.header": "身份验证请求头。键必须匹配模式 ^[a-zA-Z0-9._-]+$ 。 header 和 query 至少需要配置其中一个。",
+        "auth.query": "身份验证查询参数。键必须匹配模式 ^[a-zA-Z0-9._-]+$ 。 header 和 query 至少需要配置其中一个。",
+        "options": "模型配置。除了 model 之外，还可以配置其他参数，这些参数会在请求体中转发给上游 LLM 服务。例如，使用 OpenAI 时，可以配置 temperature 、 top_p 和 stream 等参数。更多可用选项请参阅 LLM 提供商的 API 文档。",
+        "options.model": "LLM 模型名称，例如 gpt-4 或 gpt-3.5 。更多可用模型请参阅 LLM 提供商的 API 文档。",
+        "override": "覆盖设置。",
+        "override.endpoint": "LLM 提供商端点。当 provider 为 openai-compatible 时必填。",
+        "timeout": "请求 LLM 服务的超时时间（毫秒）。",
+        "keepalive": "是否在请求 LLM 服务时保持连接。",
+        "keepalive_timeout": "请求 LLM 服务的 keepalive 超时时间（毫秒）。",
+        "keepalive_pool": "连接 LLM 服务的 keepalive 连接池大小。",
+        "ssl_verify": "是否验证 LLM 服务的 SSL 证书。"
+      }
+    },
+    "examples": [
+      {
+        "title": "脱敏敏感信息",
+        "anchor": "脱敏敏感信息"
+      },
+      {
+        "title": "格式转换",
+        "anchor": "格式转换"
+      },
+      {
+        "title": "信息摘要",
+        "anchor": "信息摘要"
+      },
+      {
+        "title": "向 OpenAI 兼容的 LLM 发送请求",
+        "anchor": "向-openai-兼容的-llm-发送请求"
+      }
+    ]
+  },
+  "ai-rate-limiting": {
+    "overview": [
+      "ai-rate-limiting 插件对发送到 LLM 服务的请求实施基于令牌的速率限制。它通过控制在指定时间范围内消耗的令牌数量来帮助管理 API 使用，确保公平的资源分配并防止服务过载。它通常与 ai-proxy 或 ai-proxy-multi 插件一起使用。"
+    ],
+    "fields": {
+      "route": {
+        "limit": "在给定时间间隔内允许的最大令牌数。 limit 和 instances.limit 中至少应配置一个。如果未配置 rules ，则为必填项。",
+        "time_window": "与速率限制 limit 对应的时间间隔（秒）。 time_window 和 instances.time_window 中至少应配置一个。如果未配置 rules ，则为必填项。",
+        "show_limit_quota_header": "如果为 true，则在响应中包含速率限制头部。当未设置 rules 时，头部为 X-AI-RateLimit-Limit-* 、 X-AI-RateLimit-Remaining-* 和 X-AI-RateLimit-Reset-* ，其中 * 是实例名称。当设置了 rules 时，详见 rules.header_prefix 。",
+        "limit_strategy": "应用速率限制的令牌类型。 total_tokens 是 prompt_tokens 和 completion_tokens 的总和。当设置为 expression 时，使用 cost_expr 字段动态计算令牌消耗。",
+        "cost_expr": "用于动态计算令牌消耗的 Lua 算术表达式。变量从 LLM API 原始使用量响应字段注入。缺失的变量默认为 0。仅在 limit_strategy 为 expression 时有效。示例： input_tokens + cache_creation_input_tokens + output_tokens 。",
+        "instances": "LLM 实例速率限制配置。",
+        "instances.name": "LLM 服务实例的名称。",
+        "instances.limit": "实例在给定时间间隔内允许的最大令牌数。",
+        "instances.time_window": "实例速率限制 limit 对应的时间间隔（秒）。",
+        "rejected_code": "当超出配额的请求被拒绝时返回的 HTTP 状态码。",
+        "rejected_msg": "当超出配额的请求被拒绝时返回的响应体。",
+        "rules": "按顺序应用的速率限制规则数组。如果配置了此项，则优先于 limit 和 time_window 。",
+        "rules.count": "在给定时间间隔内允许的最大令牌数。可以是静态整数或变量表达式，如 $http_custom_limit 。",
+        "rules.time_window": "与速率限制 count 对应的时间间隔（秒）。可以是静态整数或变量表达式。",
+        "rules.key": "用于计数请求的键。如果配置的键不存在，则不会执行该规则。 key 被解释为变量组合。所有变量应以美元符号（ $ ）为前缀。例如： $http_custom_a $http_custom_b 。",
+        "rules.header_prefix": "速率限制响应头部的前缀。配置后，前缀插入到头部名称中 X-AI- 之后。例如，将 header_prefix 设置为 test 时，头部变为 X-AI-Test-RateLimit-Limit 、 X-AI-Test-RateLimit-Remaining 和 X-AI-Test-RateLimit-Reset 。未配置时，使用规则在数组中的索引作为前缀。例如，第一条规则的头部为 X-AI-1-RateLimit-Limit 、 X-AI-1-RateLimit-Remaining 和 X-AI-1-RateLimit-Reset 。"
+      }
+    },
+    "examples": [
+      {
+        "title": "与ai-proxy一起应用速率限制",
+        "anchor": "与-ai-proxy-一起应用速率限制"
+      },
+      {
+        "title": "对多个实例中的一个进行速率限制",
+        "anchor": "对多个实例中的一个进行速率限制"
+      },
+      {
+        "title": "对所有实例应用相同配额",
+        "anchor": "对所有实例应用相同配额"
+      },
+      {
+        "title": "配置实例优先级和速率限制",
+        "anchor": "配置实例优先级和速率限制"
+      },
+      {
+        "title": "按消费者进行负载均衡和速率限制",
+        "anchor": "按消费者进行负载均衡和速率限制"
+      },
+      {
+        "title": "按规则进行速率限制",
+        "anchor": "按规则进行速率限制"
+      }
+    ]
+  },
+  "ai-prompt-decorator": {
+    "overview": [
+      "ai-prompt-decorator 插件通过在用户输入提示前后添加预设提示来修改用户输入，以在内容生成中设定上下文。这种做法有助于模型在交互过程中按照预期的指导方针运行。"
+    ],
+    "fields": {
+      "route": {
+        "prepend": "要前置的提示对象数组。",
+        "prepend.role": "消息的角色。",
+        "prepend.content": "消息的内容（提示）。",
+        "append": "要追加的提示对象数组。",
+        "append.role": "消息的角色。",
+        "append.content": "消息的内容（提示）。"
+      }
+    },
+    "examples": [
+      {
+        "title": "前置和追加消息",
+        "anchor": "前置和追加消息"
+      }
+    ]
+  },
+  "ai-prompt-template": {
+    "overview": [
+      "ai-prompt-template 插件支持预先配置提示词模板，这些模板仅接受用户在指定的模板变量中输入，采用”填空”的方式。它简化了对 OpenAI、Anthropic 等大语言模型提供商及其模型的访问，让你可以定义可复用的提示词结构。"
+    ],
+    "fields": {
+      "route": {
+        "templates": "模板对象数组。",
+        "templates.name": "模板的名称。在请求路由时，请求中应包含与所配置模板相对应的模板名称。",
+        "templates.template": "模板规范。",
+        "templates.template.model": "LLM 模型的名称，例如 gpt-4 或 gpt-3.5 。更多可用模型请参阅 LLM 提供商的 API 文档。",
+        "templates.template.messages": "模板消息规范。",
+        "templates.template.messages.role": "消息的角色。",
+        "templates.template.messages.content": "消息（提示词）的内容。使用 {{variable_name}} 语法定义模板变量，这些变量将从请求体中填充。"
+      }
+    },
+    "examples": [
+      {
+        "title": "为自定义复杂度的开放式问题配置模板",
+        "anchor": "为自定义复杂度的开放式问题配置模板"
+      },
+      {
+        "title": "配置多个模板",
+        "anchor": "配置多个模板"
+      }
+    ]
+  },
+  "ai-prompt-guard": {
+    "overview": [
+      "ai-prompt-guard 插件通过检查和验证传入的提示消息来保护你的 LLM 端点。它根据用户定义的允许和拒绝模式检查请求内容，确保只有经过批准的输入才会被转发到上游 LLM。根据其配置，该插件可以仅检查最新消息或整个对话历史，并且可以设置为检查所有角色的提示或仅检查最终用户的提示。",
+      "当同时配置了 allow_patterns 和 deny_patterns 时，插件首先确保至少匹配一个 allow_patterns 。如果没有匹配，请求将被拒绝。如果匹配了允许的模式，它会继续检查是否存在任何拒绝模式的匹配。"
+    ],
+    "fields": {
+      "route": {
+        "match_all_roles": "如果为 true ，验证所有角色的消息。如果为 false ，仅验证 user 角色的消息。",
+        "match_all_conversation_history": "如果为 true ，连接并检查对话历史中的所有消息。如果为 false ，仅检查最后一条消息的内容。",
+        "allow_patterns": "消息应匹配的正则表达式模式数组。配置后，消息必须至少匹配一个模式才被视为有效。",
+        "deny_patterns": "消息不应匹配的正则表达式模式数组。如果消息匹配任何模式，请求将被拒绝。如果同时配置了 allow_patterns 和 deny_patterns ，插件会首先确保至少匹配一个 allow_patterns 。",
+        "fail_mode": "当请求体不匹配该插件可识别的任何 AI 协议时的处理行为（例如 Consumer 级别绑定时的普通 HTTP 流量，或未经过 ai-proxy 的请求）。 skip ：放行请求且不做检查； warn ：放行并记录 warning 日志； error ：拒绝请求。"
+      }
+    },
+    "examples": [
+      {
+        "title": "实现允许和拒绝模式",
+        "anchor": "实现允许和拒绝模式"
+      },
+      {
+        "title": "验证所有角色的消息和对话历史",
+        "anchor": "验证所有角色的消息和对话历史"
+      }
+    ]
+  },
+  "ai-aws-content-moderation": {
+    "overview": [
+      "ai-aws-content-moderation 插件集成了 AWS Comprehend ，用于在代理请求到 LLM 时检查请求内容中的有害内容，例如亵渎、仇恨言论、侮辱、骚扰、暴力等，如果评估结果超过配置的阈值则拒绝请求。",
+      "该插件是协议感知的：它会从 LLM 请求中提取提示内容（例如 messages[].content ），仅审核解码后的文本，而不是原始请求体。 request_check_roles 用于选择审核哪些消息角色， request_check_mode 可将 user / tool 的审核范围收窄到最新一轮，避免每次请求都重复审核历史对话。"
+    ],
+    "fields": {
+      "route": {
+        "comprehend": "AWS Comprehend 配置。",
+        "comprehend.access_key_id": "AWS 访问密钥 ID。",
+        "comprehend.secret_access_key": "AWS 秘密访问密钥。",
+        "comprehend.region": "AWS 区域。",
+        "comprehend.endpoint": "AWS Comprehend 服务端点。未设置时默认为 https://comprehend.{region}.amazonaws.com 。如果设置，必须匹配模式 ^https?:// 。",
+        "comprehend.ssl_verify": "如果为 true，则启用 TLS 证书验证。",
+        "moderation_categories": "审核类别及其对应阈值的键值对。在每个键值对中，键应为 PROFANITY 、 HATE_SPEECH 、 INSULT 、 HARASSMENT_OR_ABUSE 、 SEXUAL 或 VIOLENCE_OR_THREAT 之一；阈值应在 0 到 1 之间（包含）。",
+        "moderation_threshold": "整体毒性阈值。值越高，允许的有害内容越多。此选项与 moderation_categories 中的单独类别阈值不同。例如，如果 moderation_categories 中设置了 PROFANITY 阈值为 0.5 ，而请求的 PROFANITY 分数为 0.1 ，则请求不会超过类别阈值。但如果请求的其他类别（如 SEXUAL 或 VIOLENCE_OR_THREAT ）超过了 moderation_threshold ，则请求将被拒绝。",
+        "check_request": "如果为 true ，则审核请求内容。",
+        "request_check_roles": "请求侧审核哪些消息角色。 user 、 tool 与 assistant 遵循 request_check_mode ； system 每次请求都审核（其可能被恶意 ToolCall 参数覆盖篡改），并且同时覆盖 OpenAI 的 developer 角色（新模型上用于替代 system ）。请求中的 assistant 消息由客户端提供，而非模型自身的输出，因此默认也会被审核。注意：tool 结果审核适用于 OpenAI 兼容格式（tool 输出为独立的 tool 角色/项）；Anthropic、Bedrock 的 tool 结果以嵌套 block 形式存在于 user 消息中，其内容不会被抽取。",
+        "request_check_mode": "审核哪些 user/tool/assistant 消息。 last ：仅审核最后一段连续的所选角色消息（最新一轮）； all ：审核所有所选角色消息。不作用于 system ——只要通过 request_check_roles 启用， system 每次都审核。注意： last 与 assistant 同时使用会扩大而非缩小审核范围，因为 assistant 消息不再中断该连续块；若只想审核最新一轮，请从 request_check_roles 中移除 assistant 。",
+        "deny_code": "请求被拒绝时返回的 HTTP 状态码。默认为 200 ，使兼容 provider 的拒绝响应在客户端 SDK 中被解析为正常补全；设置为 4xx 可将拒绝暴露为 HTTP 错误。",
+        "deny_message": "请求被拒绝时返回的消息。未设置时，返回审核原因（例如 request body exceeds toxicity threshold ）。",
+        "fail_mode": "当请求未经过 ai-proxy / ai-proxy-multi ，因而无法作为 AI 请求进行审核时的处理行为。 skip ：放行请求且不做检查； warn ：放行并记录 warning 日志； error ：拒绝请求。"
+      }
+    },
+    "examples": [
+      {
+        "title": "审核亵渎内容",
+        "anchor": "审核亵渎内容"
+      },
+      {
+        "title": "审核整体毒性",
+        "anchor": "审核整体毒性"
+      }
+    ]
+  },
+  "ai-aliyun-content-moderation": {
+    "overview": [
+      "ai-aliyun-content-moderation 插件集成了 阿里云机器辅助审核 Plus ，用于在代理 LLM 请求时检查请求和响应内容的风险等级，例如亵渎、仇恨言论、侮辱、骚扰、暴力等，当评估结果超过配置的阈值时拒绝请求。",
+      "请确保在插件中正确配置 access_key_secret 。如果配置错误，审核检查将失败，请求可能仍会被转发到 LLM 上游。你将在网关的错误日志中看到来自插件的 Specified signature is not matched with our calculation 错误。"
+    ],
+    "fields": {
+      "route": {
+        "access_key_id": "阿里云访问密钥 ID。",
+        "access_key_secret": "阿里云访问密钥。该值在存储到 etcd 之前会使用 AES 加密。",
+        "region_id": "阿里云区域 ID。",
+        "endpoint": "阿里云端点。",
+        "check_request": "如果为 true ，则审核请求内容。",
+        "check_response": "如果为 true ，则审核响应内容。",
+        "stream_check_mode": "流式审核模式。 realtime ：流式传输期间批量检查。 final_packet ：在最后附加风险等级。",
+        "stream_check_cache_size": "realtime 模式下每次审核批次的最大字节数（按 UTF-8 编码后的字节长度计算）。",
+        "stream_check_interval": "realtime 模式下批次检查之间的间隔秒数。",
+        "request_check_roles": "请求侧审核哪些消息角色。 user 与 tool 遵循 request_check_mode ； system 每次请求都审核（其可能被恶意 ToolCall 参数覆盖篡改），并且同时覆盖 OpenAI 的 developer 角色（新模型上用于替代 system ）。默认 [\"user\"] 保持既有行为。注意：tool 结果审核适用于 OpenAI 兼容格式（tool 输出为独立的 tool 角色/项）；Anthropic、Bedrock 的 tool 结果以嵌套 block 形式存在于 user 消息中，其内容不会被抽取。",
+        "request_check_mode": "审核哪些 user/tool 消息。 last ：仅审核最后一段连续的所选角色消息（最新一轮）； all ：审核所有所选角色消息。不作用于 system ——只要通过 request_check_roles 启用， system 每次都审核。",
+        "request_check_service": "用于请求审核的阿里云服务。",
+        "request_check_length_limit": "请求内容长度上限。如果超过该限制，内容将分块发送到阿里云。例如，如果请求内容为 250 个字符，且 request_check_length_limit 设置为 100 ，则内容将分 3 次请求发送到阿里云。",
+        "response_check_service": "用于响应审核的阿里云服务。",
+        "response_check_length_limit": "响应内容长度上限。如果超过该限制，内容将分块发送到阿里云。例如，如果响应内容为 250 个字符，且 response_check_length_limit 设置为 100 ，则内容将分 3 次请求发送到阿里云。",
+        "risk_level_bar": "如果评估的风险等级低于 risk_level_bar ，请求或响应将分别被放行到上游 LLM 或客户端。",
+        "deny_code": "拒绝时的 HTTP 状态码。默认为 200 ，使兼容 provider 的拒绝响应在客户端 SDK 中被解析为正常补全；设置为 4xx 可将拒绝暴露为 HTTP 错误。",
+        "deny_message": "拒绝时的消息。",
+        "timeout": "超时时间（毫秒）。",
+        "keepalive": "如果为 true ，启用到阿里云的 HTTP 连接保活。",
+        "keepalive_pool": "连接保活池的最大连接数。",
+        "keepalive_timeout": "连接保活超时时间（毫秒）。",
+        "ssl_verify": "如果为 true ，启用 SSL 证书验证。",
+        "fail_mode": "当请求不是该插件可识别的 AI 请求时的处理行为（例如 Consumer 级别绑定时的普通 HTTP 流量，或未经过 ai-proxy 的请求）。 skip ：放行请求且不做检查； warn ：放行并记录 warning 日志； error ：拒绝请求。"
+      }
+    },
+    "examples": [
+      {
+        "title": "审核请求内容毒性",
+        "anchor": "审核请求内容毒性"
+      },
+      {
+        "title": "调整风险等级阈值",
+        "anchor": "调整风险等级阈值"
+      }
+    ]
+  },
+  "ai-rag": {
+    "overview": [
+      "ai-rag 插件为 LLM 提供检索增强生成（Retrieval-Augmented Generation，RAG）功能。它促进从外部数据源高效检索相关文档或信息，这些信息用于增强 LLM 响应，从而提高生成输出的准确性和上下文相关性。",
+      "该插件支持使用 Azure OpenAI 和 Azure AI Search 服务来生成嵌入和执行向量搜索。欢迎提交 PR 以引入对其他服务提供商的支持。"
+    ],
+    "fields": {
+      "route": {
+        "embeddings_provider": "嵌入模型提供商的配置。",
+        "embeddings_provider.azure_openai": "Azure OpenAI 嵌入模型的配置。",
+        "embeddings_provider.azure_openai.endpoint": "Azure OpenAI 嵌入模型端点。",
+        "embeddings_provider.azure_openai.api_key": "Azure OpenAI API 密钥。",
+        "vector_search_provider": "向量搜索提供商的配置。",
+        "vector_search_provider.azure_ai_search": "Azure AI Search 的配置。",
+        "vector_search_provider.azure_ai_search.endpoint": "Azure AI Search 端点。",
+        "vector_search_provider.azure_ai_search.api_key": "Azure AI Search API 密钥。",
+        "ai_rag": "请求体 RAG 规范。",
+        "ai_rag.embeddings": "生成嵌入所需的请求参数。内容取决于配置的提供商的 API 规范。",
+        "ai_rag.vector_search": "执行向量搜索所需的请求参数。内容取决于配置的提供商的 API 规范。",
+        "input": "用于计算嵌入的输入文本，编码为字符串。",
+        "user": "代表最终用户的唯一标识符，可帮助监控和检测滥用行为。",
+        "encoding_format": "返回嵌入的格式。可以是 float 或 base64 。默认为 float 。",
+        "dimensions": "输出嵌入的维数。它应与你的嵌入模型的维数匹配。例如， text-embedding-ada-002 的维数固定为 1536。对于 text-embedding-3-small 或 text-embedding-3-large ，维数范围分别为 1 到 1536 和 3072。",
+        "fields": "向量搜索的字段。"
+      }
+    },
+    "examples": [
+      {
+        "title": "与 Azure 集成以获得 RAG 增强响应",
+        "anchor": "与-azure-集成以获得-rag-增强响应"
+      }
+    ]
+  },
+  "zipkin": {
+    "overview": [
+      "Zipkin 是一个开源的分布式链路追踪系统。 zipkin 插件为 APISIX 提供了追踪功能，并根据 Zipkin API 规范 将追踪数据上报给 Zipkin。",
+      "该插件还支持将追踪数据发送到其他兼容的收集器，例如 Jaeger 和 Apache SkyWalking ，这两者都支持 Zipkin v1 和 v2 API。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint": "要 POST 的 Zipkin span 端点，例如 http://127.0.0.1:9411/api/v2/spans 。",
+        "sample_ratio": "请求采样频率。设置为 1 表示对每个请求进行采样。",
+        "service_name": "在 Zipkin 中显示的服务名称。",
+        "server_addr": "Zipkin 报告器的 IPv4 地址。例如，可以将其设置为你的外部 IP 地址。",
+        "span_version": "span 类型的版本。"
+      }
+    },
+    "examples": [
+      {
+        "title": "将追踪数据发送到 Zipkin",
+        "anchor": "将追踪数据发送到-zipkin"
+      },
+      {
+        "title": "将追踪数据发送到 Jaeger",
+        "anchor": "将追踪数据发送到-jaeger"
+      },
+      {
+        "title": "在日志中使用追踪变量",
+        "anchor": "在日志中使用追踪变量"
+      }
+    ]
+  },
+  "skywalking": {
+    "overview": [
+      "skywalking 插件支持与 Apache SkyWalking 集成以进行请求跟踪。",
+      "SkyWalking 使用其原生的 Nginx Lua 跟踪器从服务和 URI 角度提供跟踪、拓扑分析和指标。APISIX 支持 HTTP 协议与 SkyWalking 服务器交互。"
+    ],
+    "fields": {
+      "route": {
+        "sample_ratio": "请求采样频率。将采样率设置为 1 表示对所有请求进行采样。"
+      }
+    },
+    "examples": [
+      {
+        "title": "跟踪所有请求",
+        "anchor": "跟踪所有请求"
+      },
+      {
+        "title": "将跟踪与日志关联",
+        "anchor": "将跟踪与日志关联"
+      }
+    ]
+  },
+  "opentelemetry": {
+    "overview": [
+      "opentelemetry 插件可用于根据 OpenTelemetry Specification 协议规范上报 Traces 数据。该插件仅支持二进制编码的 OTLP over HTTP，即请求类型为 application/x-protobuf 的数据上报。"
+    ],
+    "fields": {
+      "route": {
+        "sampler": "采样策略。",
+        "sampler.name": "采样策略。 always_on ：全采样； always_off ：不采样； trace_id_ratio ：基于 trace id 的百分比采样； parent_base ：如果存在 tracing 上游，则使用上游的采样决定，否则使用配置的采样策略决策。",
+        "sampler.options": "采样策略参数。",
+        "sampler.options.fraction": "trace_id_ratio ：采样策略的百分比。",
+        "sampler.options.root": "parent_base ：采样策略在没有上游 tracing 时，会使用 root 采样策略做决策。",
+        "sampler.options.root.name": "root 采样策略。",
+        "sampler.options.root.options": "root 采样策略参数。",
+        "sampler.options.root.options.fraction": "trace_id_ratio root 采样策略的百分比",
+        "additional_attributes": "追加到 trace span 的额外属性，支持内置 NGINX 或 APISIX 变量 。",
+        "additional_header_prefix_attributes": "附加到跟踪范围属性的标头或标头前缀。例如，使用 x-my-header\" 或 x-my-headers-* 来包含带有前缀 x-my-headers- 的所有标头。"
+      }
+    },
+    "examples": [
+      {
+        "title": "启用全面的请求生命周期追踪",
+        "anchor": "启用全面的请求生命周期追踪"
+      },
+      {
+        "title": "启用 opentelemetry 插件",
+        "anchor": "启用-opentelemetry-插件"
+      },
+      {
+        "title": "将 Traces 上报到 OpenTelemetry",
+        "anchor": "将-traces-上报到-opentelemetry"
+      },
+      {
+        "title": "在日志中使用 trace 变量",
+        "anchor": "在日志中使用-trace-变量"
+      }
+    ]
+  },
+  "prometheus": {
+    "overview": [
+      "prometheus 插件提供将 APISIX 与 Prometheus 集成的能力。",
+      "启用该插件后，APISIX 将开始收集相关指标，例如 API 请求和延迟，并以 基于文本的展示格式 导出到 Prometheus。然后，你可以在 Prometheus 中创建事件监控和警报，以监控 API 网关和 API 的健康状况。"
+    ],
+    "fields": {
+      "route": {
+        "prefer_name": "当设置为 true 时，则在 prometheus 指标中导出路由/服务名称而非它们的 id 。",
+        "apisix_bandwidth": "APISIX 中每个服务消耗的总流量（字节）。",
+        "apisix_etcd_modify_indexes": "APISIX 键的 etcd 修改次数。",
+        "apisix_batch_process_entries": "发送数据时批处理中的剩余条目数，例如使用 http logger 和其他日志插件。",
+        "apisix_etcd_reachable": "APISIX 是否可以访问 etcd。值为 1 表示可达， 0 表示不可达。",
+        "apisix_http_status": "插件处理和代理完成后返回给客户端的 HTTP 状态代码。该值可能与上游状态不同。",
+        "apisix_http_requests_total": "来自客户端的 HTTP 请求数量。",
+        "apisix_nginx_http_current_connections": "当前与客户端的连接数量。",
+        "apisix_nginx_metric_errors_total": "nginx-lua-prometheus 错误的总数。",
+        "apisix_http_latency": "HTTP 请求延迟（毫秒）。",
+        "apisix_llm_latency": "LLM 请求延迟（毫秒），包括总延迟和首 token 延迟。",
+        "apisix_llm_prompt_tokens": "LLM 请求消耗的 prompt token 总数。",
+        "apisix_llm_completion_tokens": "LLM 请求生成的 completion token 总数。",
+        "apisix_llm_active_connections": "记录 LLM 上游活动的 gauge。没有回退重试时，它反映活跃请求数； ai-proxy-multi 回退重试可能导致失败实例的序列被高估。详情请参见 标签说明 。",
+        "apisix_llm_prompt_tokens_dist": "每个 LLM 请求消耗的 prompt token 数量分布。",
+        "apisix_llm_completion_tokens_dist": "每个 LLM 请求生成的 completion token 数量分布。",
+        "apisix_ai_cache_hits_total": "AI 缓存命中总数，按缓存层区分。",
+        "apisix_ai_cache_misses_total": "AI 缓存未命中总数。",
+        "apisix_ai_cache_bypasses_total": "绕过 AI 缓存的请求总数。",
+        "apisix_ai_cache_embedding_latency": "AI 缓存 embedding 调用延迟（毫秒）。",
+        "apisix_node_info": "APISIX 节点的信息，例如主机名和当前的 APISIX 版本号。",
+        "apisix_shared_dict_capacity_bytes": "NGINX 共享字典 的总容量。",
+        "apisix_shared_dict_free_space_bytes": "NGINX 共享字典 中剩余的空间。",
+        "apisix_upstream_status": "上游节点的健康检查状态，如果在上游配置了健康检查，则可用。值为 1 表示健康， 0 表示不健康。",
+        "apisix_stream_connection_total": "每个 Stream Route 处理的总连接数。",
+        "apisix_stream_active_connections": "当前正在代理的 Stream 会话数，按监听地址区分。同时覆盖 TCP 连接与 UDP 会话。",
+        "apisix_stream_status": "每条 Stream 会话结束时计数一次，按结束方式分类。",
+        "apisix_stream_bandwidth": "Stream 子系统代理的总流量（字节），按监听地址与方向区分。",
+        "code": "返回给客户端的 HTTP 响应代码。",
+        "route": "HTTP 状态来源的路由 ID，当 prefer_name 为 false （默认）时，使用路由 ID，当 prefer_name 为 true 时，使用路由名称。如果请求不匹配任何路由，则默认为空字符串。",
+        "matched_uri": "匹配请求的路由 URI。如果请求不匹配任何路由，则默认为空字符串。",
+        "matched_host": "匹配请求的路由主机。如果请求不匹配任何路由，或路由未配置主机，则默认为空字符串。",
+        "service": "HTTP 状态来源的服务 ID，当 prefer_name 为 false （默认）时，使用服务 ID，当 prefer_name 为 true 时，使用服务名称。如果匹配的路由不属于任何服务，则默认为路由上配置的主机值。",
+        "consumer": "与请求关联的消费者名称。如果请求没有与之关联的消费者，则默认为空字符串。",
+        "node": "上游节点的 IP 地址。对于 AI 路由，该值为 ai-proxy 或 ai-proxy-multi 上报的 LLM 实例名称。",
+        "request_type": "请求类别： traditional_http 、 websocket 、 ai_chat 或 ai_stream 。以 101 Switching Protocols 响应的请求为 websocket 。",
+        "request_llm_model": "客户端请求的模型名称。",
+        "llm_model": "AI 请求实际使用的目标模型。优先使用 AI 实例中配置的模型，否则使用客户端请求的模型；传统 HTTP 流量中为空字符串。",
+        "response_source": "响应来源： apisix 表示由 APISIX 生成， nginx 表示 NGINX 代理错误， upstream 表示来自上游服务的响应。",
+        "listen_addr": "客户端连接的监听地址，例如 0.0.0.0:9100 。",
+        "side": "字节经过的连接侧： downstream 表示 APISIX 与客户端之间， upstream 表示 APISIX 与上游之间。",
+        "type": "相对 APISIX 的方向，与 apisix_bandwidth 一致： ingress 表示 APISIX 接收的字节， egress 表示 APISIX 发送的字节。",
+        "route_id": "请求对应的路由 ID，当 prefer_name 为 false （默认）时，使用路由 ID，当 prefer_name 为 true 时，使用路由名称。如果请求不匹配任何路由，则默认为空字符串。",
+        "service_id": "指标对应的服务 ID； prefer_name 为 true 时保存服务名称。如果匹配路由未引用服务，则默认为空字符串。",
+        "layer": "仅存在于 apisix_ai_cache_hits_total 。命中的缓存层： exact 或 semantic 。",
+        "name": "与健康检查配置的上游对应的资源 ID，例如 /apisix/routes/1 和 /apisix/upstreams/1 。",
+        "ip": "上游节点的 IP 地址。",
+        "port": "节点的端口号。"
+      }
+    },
+    "examples": [
+      {
+        "title": "获取 APISIX 指标",
+        "anchor": "获取-apisix-指标"
+      },
+      {
+        "title": "在公共 API 端点上公开 APISIX 指标",
+        "anchor": "在公共-api-端点上公开-apisix-指标"
+      },
+      {
+        "title": "监控上游健康状态",
+        "anchor": "监控上游健康状态"
+      },
+      {
+        "title": "为指标添加额外标签",
+        "anchor": "为指标添加额外标签"
+      },
+      {
+        "title": "通过禁用标签降低指标基数",
+        "anchor": "通过禁用标签降低指标基数"
+      },
+      {
+        "title": "使用 Prometheus 监控 TCP/UDP 流量",
+        "anchor": "使用-prometheus-监控-tcpudp-流量"
+      }
+    ]
+  },
+  "node-status": {
+    "overview": [
+      "node-status 插件可用于通过暴露的 API 查询 APISIX 的请求状态，并返回基本的状态信息。"
+    ],
+    "fields": {
+      "route": {
+        "status": "APISIX 的状态信息。",
+        "total": "客户端请求总数。",
+        "waiting": "当前等待客户端请求的空闲连接数。",
+        "accepted": "当前已经接受的客户端连接总数。",
+        "writing": "当前正在写给客户端响应的连接数。",
+        "handled": "当前已经处理的连接总数，除非达到其他资源的限制，否则此值与 accepted 相同。",
+        "active": "当前活跃的客户端连接数。",
+        "reading": "当前正在读取请求头的连接数。",
+        "id": "APISIX UID 信息，保存在 ./conf/apisix.uid 文件中。"
+      }
+    },
+    "examples": []
+  },
+  "datadog": {
+    "overview": [
+      "datadog 插件支持与 Datadog 集成。Datadog 是云应用中最常用的可观测性服务之一。启用后，插件通过 UDP 协议将指标推送到与 Datadog agent 捆绑的 DogStatsD 服务器。",
+      "该插件支持通过 UDP 将指标以批量方式推送到外部 Datadog 代理。数据可能需要一段时间才能被接收，会在 批处理器 的定时器到期后自动发送。"
+    ],
+    "fields": {
+      "route": {
+        "prefer_name": "如果为 true ，在指标标签中导出路由/服务名称而非 ID。",
+        "include_path": "如果为 true ，在指标标签中包含路径模式。",
+        "include_method": "如果为 true ，在指标标签中包含 HTTP 方法。",
+        "constant_tags": "附加到该路由所有指标的静态键值标签，便于按信号对指标进行分组。",
+        "batch_max_size": "每个批次允许的最大指标条目数。达到后立即发送至 Datadog agent。设置为 1 表示立即处理。",
+        "inactive_timeout": "等待新条目的最长时间（秒），超过则发送批次。该值应小于 buffer_duration 。",
+        "buffer_duration": "从最早条目起允许的最长缓冲时间（秒），超过则发送批次。",
+        "retry_delay": "批次发送失败后重试的时间间隔，单位为秒。",
+        "max_retry_count": "丢弃条目前允许的最大重试次数。",
+        "request.counter": "收到的请求数量。",
+        "request.latency": "处理请求所需时间，单位为毫秒。",
+        "upstream.latency": "代理请求到上游服务器并收到响应所需时间，单位为毫秒。",
+        "apisix.latency": "APISIX agent 处理请求所需时间，单位为毫秒。",
+        "ingress.size": "请求体大小，单位为字节。",
+        "egress.size": "响应体大小，单位为字节。",
+        "route_name": "路由名称。如果不存在或 prefer_name 为 false，则回退到路由 ID。",
+        "service_name": "服务名称。如果不存在或 prefer_name 为 false，则回退到服务 ID。",
+        "consumer": "若路由关联了消费者，则为消费者的用户名。",
+        "balancer_ip": "处理当前请求的上游负载均衡器 IP 地址。",
+        "response_status": "HTTP 响应状态码，例如 201 、 404 或 503 。",
+        "response_status_class": "HTTP 响应状态码类别，例如 2xx 、 4xx 或 5xx 。APISIX 3.14.0 及以上版本支持。",
+        "scheme": "请求协议，例如 HTTP 和 gRPC。",
+        "path": "HTTP 路径模式。仅当 include_path 为 true 时可用。APISIX 3.14.0 及以上版本支持。",
+        "method": "HTTP 方法。仅当 include_method 为 true 时可用。APISIX 3.14.0 及以上版本支持。"
+      }
+    },
+    "examples": [
+      {
+        "title": "更新 Datadog Agent 地址及元数据",
+        "anchor": "更新-datadog-agent-地址及元数据"
+      },
+      {
+        "title": "监控路由指标",
+        "anchor": "监控路由指标"
+      }
+    ]
+  },
+  "http-logger": {
+    "overview": [
+      "http-logger 插件将请求和响应日志以 JSON 对象批量推送到 HTTP(S) 服务器，并支持自定义日志格式。"
+    ],
+    "fields": {
+      "route": {
+        "uri": "HTTP(S) 服务器的 URI。",
+        "auth_header": "HTTP(S) 服务器所需的授权请求头。",
+        "timeout": "发送请求后保持连接的存活时间。",
+        "log_format": "以 JSON 键值对形式声明的自定义日志格式，值可以引用 NGINX 变量 。也可以通过 插件元数据 在全局范围内配置日志格式，该配置将应用于所有 http-logger 插件实例。如果插件实例上的日志格式与插件元数据上的日志格式不同，插件实例的日志格式优先生效。",
+        "include_req_body": "若为 true，则在日志中包含请求体。注意：若请求体太大而无法保存在内存中，由于 NGINX 的限制，将无法记录。",
+        "include_req_body_expr": "lua-resty-expr 表达式数组。当 include_req_body 为 true 时使用，仅当此处表达式求值为 true 时才记录请求体。",
+        "include_resp_body": "若为 true，则在日志中包含响应体。",
+        "include_resp_body_expr": "lua-resty-expr 表达式数组。当 include_resp_body 为 true 时使用，仅当此处表达式求值为 true 时才记录响应体。",
+        "max_req_body_bytes": "日志中记录的最大请求体字节数。超出该值的请求体将被截断。",
+        "max_resp_body_bytes": "日志中记录的最大响应体字节数。超出该值的响应体将被截断。",
+        "concat_method": "日志的拼接方式。设为 json 时对所有待发日志使用 json.encode ；设为 new_line 时也使用 json.encode ，但用换行符 \\n 拼接各行。",
+        "ssl_verify": "若为 true，则验证服务器的 SSL 证书。"
+      }
+    },
+    "examples": [
+      {
+        "title": "以默认日志格式记录请求",
+        "anchor": "以默认日志格式记录请求"
+      },
+      {
+        "title": "通过插件元数据记录请求和响应头",
+        "anchor": "通过插件元数据记录请求和响应头"
+      },
+      {
+        "title": "按条件记录请求体",
+        "anchor": "按条件记录请求体"
+      }
+    ]
+  },
+  "skywalking-logger": {
+    "overview": [
+      "skywalking-logger 插件将请求和响应日志作为 JSON 对象批量推送到 SkyWalking OAP 服务器，并支持日志格式的自定义。",
+      "如果存在现有的跟踪上下文，它会自动设置跟踪日志关联并依赖于 SkyWalking 跨进程传播标头协议 。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint_addr": "SkyWalking OAP 服务器的 URI。",
+        "service_name": "SkyWalking 服务名称。",
+        "service_instance_name": "SkyWalking 服务的实例名称。当设置为 $hostname 会直接获取本地主机名。",
+        "log_format": "日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。",
+        "timeout": "发送请求后保持连接活动的时间。",
+        "name": "标识 logger 的唯一标识符。如果你使用 Prometheus 监视 APISIX 指标，名称将以 apisix_batch_process_entries 导出。",
+        "include_req_body": "如果为 true，则将请求主体包含在日志中。请注意，如果请求主体太大而无法保存在内存中，则由于 NGINX 的限制而无法记录。",
+        "include_req_body_expr": "一个或多个条件的数组，形式为 lua-resty-expr 。在 include_req_body 为 true 时使用。仅当此处配置的表达式计算结果为 true 时，才会记录请求主体。",
+        "max_req_body_bytes": "在此大小范围内的请求主体将被记录，如果大小超过配置值则截断后记录。",
+        "include_resp_body": "如果为 true，则将响应主体包含在日志中。",
+        "include_resp_body_expr": "一个或多个条件的数组，形式为 lua-resty-expr 。在 include_resp_body 为 true 时使用。仅当此处配置的表达式计算结果为 true 时，才会记录响应主体。",
+        "max_resp_body_bytes": "在此大小范围内的响应主体将被记录，如果大小超过配置值则截断后记录。"
+      }
+    },
+    "examples": [
+      {
+        "title": "以默认日志格式记录请求",
+        "anchor": "以默认日志格式记录请求"
+      },
+      {
+        "title": "使用插件元数据记录请求和响应标头",
+        "anchor": "使用插件元数据记录请求和响应标头"
+      },
+      {
+        "title": "有条件地记录请求主体",
+        "anchor": "有条件地记录请求主体"
+      },
+      {
+        "title": "将跟踪与日志关联",
+        "anchor": "将跟踪与日志关联"
+      }
+    ]
+  },
+  "tcp-logger": {
+    "overview": [
+      "tcp-logger 插件可用于将日志数据发送到 TCP 服务器。",
+      "该插件还实现了将日志数据以 JSON 格式发送到监控工具或其它 TCP 服务的能力。"
+    ],
+    "fields": {
+      "route": {
+        "host": "TCP 服务器的 IP 地址或主机名。",
+        "port": "目标端口。",
+        "timeout": "发送数据超时间。",
+        "log_format": "日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。",
+        "tls": "用于控制是否执行 SSL 验证。",
+        "tls_options": "TLS 选项。",
+        "include_req_body": "当设置为 true 时，日志中将包含请求体。",
+        "include_req_body_expr": "当 include_req_body 属性设置为 true 时的过滤器。只有当此处设置的表达式求值为 true 时，才会记录请求体。有关更多信息，请参阅 lua-resty-expr 。",
+        "include_resp_body": "当设置为 true 时，日志中将包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 属性设置为 true 时进行过滤响应体，并且只有当此处设置的表达式计算结果为 true 时，才会记录响应体。更多信息，请参考 lua-resty-expr 。"
+      }
+    },
+    "examples": []
+  },
+  "kafka-logger": {
+    "overview": [
+      "kafka-logger 插件将请求和响应日志作为 JSON 对象批量推送到 Apache Kafka 集群，并支持自定义日志格式。",
+      "接收日志数据可能需要一些时间。数据将在 批处理器 中的计时器函数到期后自动发送。"
+    ],
+    "fields": {
+      "route": {
+        "broker_list": "已废弃，请改用 brokers 属性。原指需要推送的 Kafka 的 broker 列表。",
+        "brokers": "需要推送的 Kafka 的 broker 列表。",
+        "brokers.host": "Kafka broker 的节点地址，例如 192.168.1.1 。",
+        "brokers.port": "Kafka broker 的节点端口。",
+        "brokers.sasl_config": "Kafka broker 的 SASL 配置。",
+        "brokers.sasl_config.mechanism": "SASL 认证机制。",
+        "brokers.sasl_config.user": "SASL 配置中的用户名。如果配置了 sasl_config ，则必须填写。",
+        "brokers.sasl_config.password": "SASL 配置中的密码。如果配置了 sasl_config ，则必须填写。",
+        "kafka_topic": "用于推送日志的目标 topic。",
+        "producer_type": "生产者发送消息的模式。",
+        "required_acks": "生产者在确认一个请求发送完成之前需要收到的确认信息数量，用于保证发送请求的可靠性。该属性与 Kafka 的 acks 属性配置相同， required_acks 不能为 0。详情请参考 Apache Kafka 文档 。",
+        "key": "用于消息分区的键。",
+        "timeout": "发送数据的超时时间（秒）。",
+        "name": "批处理器的唯一标识符。如果使用 Prometheus 监控 APISIX 指标，该名称将以 apisix_batch_process_entries 导出。",
+        "meta_format": "收集请求信息的格式。设置为 default 时以 JSON 格式收集信息，设置为 origin 时以 HTTP 原始请求格式收集信息。详情请参考下方 示例 。",
+        "log_format": "以 JSON 键值对声明的日志格式。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。",
+        "include_req_body": "设置为 true 时，在日志中包含请求体。 注意 ：如果请求体过大无法完全存放在内存中，由于 NGINX 的限制，将无法记录。",
+        "include_req_body_expr": "当 include_req_body 设置为 true 时的过滤条件。只有当此处设置的表达式计算结果为 true 时，才会记录请求体。详情请参考 lua-resty-expr 。",
+        "max_req_body_bytes": "允许推送到 Kafka 的最大请求体大小（字节）。如果超过该值，请求体在推送前会被截断。",
+        "include_resp_body": "设置为 true 时，在日志中包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 设置为 true 时的过滤条件。只有当此处设置的表达式计算结果为 true 时，才会记录响应体。详情请参考 lua-resty-expr 。",
+        "max_resp_body_bytes": "允许推送到 Kafka 的最大响应体大小（字节）。如果超过该值，响应体在推送前会被截断。",
+        "cluster_name": "Kafka 集群的名称，在有两个或多个 Kafka 集群时使用。仅当 producer_type 设置为 async 时有效。",
+        "producer_batch_num": "对应 lua-resty-kafka 中的 batch_num 参数，聚合消息批量提交，单位为消息条数。",
+        "producer_batch_size": "对应 lua-resty-kafka 中的 batch_size 参数，单位为字节。",
+        "producer_max_buffering": "对应 lua-resty-kafka 中的 max_buffering 参数，表示最大缓冲区大小，单位为条。",
+        "producer_time_linger": "对应 lua-resty-kafka 中的 flush_time 参数，单位为秒。",
+        "meta_refresh_interval": "对应 lua-resty-kafka 中的 refresh_interval 参数，用于指定自动刷新 metadata 的间隔时长，单位为秒。",
+        "api_version": "对应 lua-resty-kafka 中的 api_version 参数，用于指定 Kafka Produce API 的版本。设置为 2 时 broker 才会存储消息的时间戳，否则时间戳为 -1 （部分消费端会显示为 1970-01-01 ）。需要 Kafka 0.10 及以上版本。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用不同的元日志格式记录日志",
+        "anchor": "使用不同的元日志格式记录日志"
+      },
+      {
+        "title": "通过插件元数据记录请求和响应头",
+        "anchor": "通过插件元数据记录请求和响应头"
+      },
+      {
+        "title": "按条件记录请求体",
+        "anchor": "按条件记录请求体"
+      }
+    ]
+  },
+  "rocketmq-logger": {
+    "overview": [
+      "rocketmq-logger 插件将请求和响应日志以 JSON 对象批量推送到 RocketMQ 集群，并支持自定义日志格式。"
+    ],
+    "fields": {
+      "route": {
+        "nameserver_list": "RocketMQ nameserver 列表。",
+        "topic": "要推送数据的目标 topic。",
+        "key": "消息的 key。",
+        "tag": "消息的 tag。",
+        "log_format": "以 JSON 键值对形式声明的自定义日志格式，值可以引用 NGINX 变量 。也可以通过 插件元数据 在全局范围内配置日志格式，将应用于所有 rocketmq-logger 插件实例。如果插件实例的日志格式与插件元数据的日志格式不同，插件实例的日志格式优先生效。",
+        "timeout": "向上游发送数据的超时时间。",
+        "use_tls": "若为 true，则启用 TLS 连接以加密传输。",
+        "access_key": "ACL 的 Access key。设置为空字符串将禁用 ACL。",
+        "secret_key": "ACL 的 Secret key。",
+        "name": "批处理器中插件的唯一标识符。若使用 Prometheus 监控 APISIX 指标，该名称将以 apisix_batch_process_entries 导出。",
+        "meta_format": "收集请求信息的格式。设为 default 以 JSON 格式收集，设为 origin 以原始 HTTP 请求格式收集。",
+        "include_req_body": "若为 true，则在日志中包含请求体。注意：若请求体太大而无法保存在内存中，由于 NGINX 的限制，将无法记录。",
+        "include_req_body_expr": "lua-resty-expr 表达式数组。当 include_req_body 为 true 时使用，仅当此处表达式求值为 true 时才记录请求体。",
+        "include_resp_body": "若为 true，则在日志中包含响应体。",
+        "include_resp_body_expr": "lua-resty-expr 表达式数组。当 include_resp_body 为 true 时使用，仅当此处表达式求值为 true 时才记录响应体。",
+        "max_req_body_bytes": "日志中记录的最大请求体字节数。超出该值的请求体将被截断。在 APISIX 3.16.0 版本中可用。",
+        "max_resp_body_bytes": "日志中记录的最大响应体字节数。超出该值的响应体将被截断。在 APISIX 3.16.0 版本中可用。",
+        "batch_max_size": "每批次允许的最大日志条目数。达到该值后，批次将被发送至日志服务。设置为 1 表示立即处理。",
+        "inactive_timeout": "在将批次发送至日志服务前等待新日志的最长时间（秒）。该值应小于 buffer_duration 。",
+        "buffer_duration": "发送批次前允许最早条目存在的最长时间（秒）。",
+        "retry_delay": "批次发送失败后重试的时间间隔（秒）。",
+        "max_retry_count": "丢弃日志条目前允许的最大重试次数。"
+      }
+    },
+    "examples": [
+      {
+        "title": "以不同元日志格式记录日志",
+        "anchor": "以不同元日志格式记录日志"
+      },
+      {
+        "title": "通过插件元数据记录请求和响应头",
+        "anchor": "通过插件元数据记录请求和响应头"
+      },
+      {
+        "title": "按条件记录请求体",
+        "anchor": "按条件记录请求体"
+      }
+    ]
+  },
+  "udp-logger": {
+    "overview": [
+      "udp-logger 插件可用于将日志数据发送到 UDP 服务器。",
+      "该插件还实现了将日志数据以 JSON 格式发送到监控工具或其它 UDP 服务的能力。"
+    ],
+    "fields": {
+      "route": {
+        "host": "UDP 服务的 IP 地址或主机名。",
+        "port": "目标端口。",
+        "timeout": "发送数据超时间。",
+        "log_format": "日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。",
+        "name": "标识 logger 的唯一标识符。如果您使用 Prometheus 监视 APISIX 指标，名称将以 apisix_batch_process_entries 导出。",
+        "include_req_body": "当设置为 true 时，日志中将包含请求体。",
+        "include_req_body_expr": "当 include_req_body 属性设置为 true 时的过滤器。只有当此处设置的表达式求值为 true 时，才会记录请求体。有关更多信息，请参阅 lua-resty-expr 。",
+        "include_resp_body": "当设置为 true 时，日志中将包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 属性设置为 true 时进行过滤响应体，并且只有当此处设置的表达式计算结果为 true 时，才会记录响应体。更多信息，请参考 lua-resty-expr 。"
+      }
+    },
+    "examples": []
+  },
+  "clickhouse-logger": {
+    "overview": [
+      "clickhouse-logger 插件将请求和响应日志批量推送到 ClickHouse 数据库，并支持自定义日志格式。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint_addrs": "ClickHouse 的 endpoints。",
+        "database": "存储日志的数据库名称。",
+        "logtable": "存储日志的表名称。",
+        "user": "ClickHouse 用户名。从 APISIX 3.16.0 开始，支持使用 $ENV:// 前缀引用环境变量，或使用 $secret:// 前缀引用密钥管理器中的值。详情参见 secrets 。",
+        "password": "ClickHouse 密码。从 APISIX 3.16.0 开始，支持使用 $ENV:// 前缀引用环境变量，或使用 $secret:// 前缀引用密钥管理器中的值。详情参见 secrets 。",
+        "timeout": "发送请求后保持连接活跃的时间（秒）。",
+        "ssl_verify": "若为 true ，则验证 SSL 证书。",
+        "log_format": "以 JSON 键值对形式声明的自定义日志格式。值可通过 $ 前缀引用 APISIX 变量 或 NGINX 变量 。也可通过 插件元数据 全局配置日志格式。",
+        "include_req_body": "若为 true ，则在日志中包含请求体。注意：如果请求体太大无法保存在内存中，由于 NGINX 的限制将无法记录。",
+        "include_req_body_expr": "当 include_req_body 为 true 时使用的过滤条件数组，以 APISIX 表达式 形式表示。仅当表达式求值为 true 时才记录请求体。",
+        "include_resp_body": "若为 true ，则在日志中包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 为 true 时使用的过滤条件数组，以 APISIX 表达式 形式表示。仅当表达式求值为 true 时才记录响应体。",
+        "max_req_body_bytes": "日志中包含的最大请求体大小（字节）。超出此值的请求体将被截断。APISIX 3.16.0 起可用。",
+        "max_resp_body_bytes": "日志中包含的最大响应体大小（字节）。超出此值的响应体将被截断。APISIX 3.16.0 起可用。",
+        "name": "批处理器中插件的唯一标识符。如果使用 Prometheus 监控 APISIX 指标，该名称将在 apisix_batch_process_entries 中导出。",
+        "batch_max_size": "单批允许的日志条目数。达到此数量后，批次将被发送至 ClickHouse。设置为 1 表示立即处理。",
+        "inactive_timeout": "在发送批次到日志服务之前等待新日志的最长时间（秒）。该值应小于 buffer_duration 。",
+        "buffer_duration": "在发送批次到日志服务之前，允许最早条目存在的最长时间（秒）。",
+        "retry_delay": "批次发送失败后重试的时间间隔（秒）。",
+        "max_retry_count": "在丢弃日志条目之前允许的最大重试次数。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用默认日志格式记录日志",
+        "anchor": "使用默认日志格式记录日志"
+      },
+      {
+        "title": "使用插件元数据自定义日志格式",
+        "anchor": "使用插件元数据自定义日志格式"
+      }
+    ]
+  },
+  "syslog": {
+    "overview": [
+      "syslog 插件将请求和响应日志以 JSON 对象批量推送到 syslog 服务器，并支持自定义日志格式。"
+    ],
+    "fields": {
+      "route": {
+        "host": "syslog 服务器的 IP 地址或主机名。",
+        "port": "syslog 服务器的目标端口。",
+        "timeout": "向上游发送数据的超时时间（毫秒）。",
+        "tls": "若为 true，则验证 TLS。",
+        "flush_limit": "推送日志到 syslog 服务器前，缓冲区和当前消息的最大大小（字节，B）。",
+        "drop_limit": "丢弃日志前，缓冲区和当前消息允许的最大大小（字节，B）。",
+        "sock_type": "使用的传输层协议。",
+        "pool_size": "sock:keepalive 使用的连接池大小。",
+        "log_format": "以 JSON 键值对形式声明的自定义日志格式，值可以引用 NGINX 变量 。也可以通过 插件元数据 在全局范围内配置日志格式，将应用于所有 syslog 插件实例。如果插件实例的日志格式与插件元数据的日志格式不同，插件实例的日志格式优先生效。",
+        "include_req_body": "若为 true，则在日志中包含请求体。注意：若请求体太大而无法保存在内存中，由于 NGINX 的限制，将无法记录。",
+        "include_req_body_expr": "lua-resty-expr 表达式数组。当 include_req_body 为 true 时使用，仅当此处表达式求值为 true 时才记录请求体。",
+        "include_resp_body": "若为 true，则在日志中包含响应体。",
+        "include_resp_body_expr": "lua-resty-expr 表达式数组。当 include_resp_body 为 true 时使用，仅当此处表达式求值为 true 时才记录响应体。",
+        "max_req_body_bytes": "日志中记录的最大请求体字节数。超出该值的请求体将被截断。在 APISIX 3.16.0 版本中可用。",
+        "max_resp_body_bytes": "日志中记录的最大响应体字节数。超出该值的响应体将被截断。在 APISIX 3.16.0 版本中可用。",
+        "name": "批处理器中插件的唯一标识符。若使用 Prometheus 监控 APISIX 指标，该名称将以 apisix_batch_process_entries 导出。",
+        "batch_max_size": "每批次允许的最大日志条目数。达到该值后，批次将被发送至日志服务。设置为 1 表示立即处理。",
+        "inactive_timeout": "在将批次发送至日志服务前等待新日志的最长时间（秒）。该值应小于 buffer_duration 。",
+        "buffer_duration": "发送批次前允许最早条目存在的最长时间（秒）。",
+        "retry_delay": "批次发送失败后重试的时间间隔（秒）。",
+        "max_retry_count": "丢弃日志条目前允许的最大重试次数。"
+      }
+    },
+    "examples": [
+      {
+        "title": "推送日志到 Syslog 服务器",
+        "anchor": "推送日志到-syslog-服务器"
+      },
+      {
+        "title": "通过插件元数据自定义日志格式",
+        "anchor": "通过插件元数据自定义日志格式"
+      },
+      {
+        "title": "按条件记录请求体",
+        "anchor": "按条件记录请求体"
+      }
+    ]
+  },
+  "log-rotate": {
+    "overview": [
+      "log-rotate 插件用于定期切分日志目录下的访问日志和错误日志。",
+      "你可以自定义日志轮换的频率以及要保留的日志数量。当日志数量超过限制时，旧的日志会被自动删除。"
+    ],
+    "fields": {
+      "route": {
+        "interval": "每间隔多长时间切分一次日志，以秒为单位。",
+        "max_kept": "最多保留多少份历史日志，超过指定数量后，自动删除老文件。",
+        "max_size": "日志文件超过指定大小时进行切分，单位为 Byte。如果 max_size 小于 0 或者根据 interval 计算的时间到达时，将不会根据 max_size 切分日志。",
+        "enable_compression": "当设置为 true 时，启用日志文件压缩。该功能需要在系统中安装 tar 。"
+      }
+    },
+    "examples": []
+  },
+  "error-log-logger": {
+    "overview": [
+      "error-log-logger 插件将 APISIX 的错误日志（ error.log ）批量推送到 TCP、 Apache SkyWalking 、Apache Kafka 或 ClickHouse 服务器。你可以指定日志严重级别，插件只发送符合条件的日志。",
+      "该插件默认为禁用状态。启用后，插件会自动开始将错误日志推送到远端服务器。你只需在插件元数据中配置远端服务器的详细信息，无需在路由等其他资源上进行配置。"
+    ],
+    "fields": {},
+    "examples": [
+      {
+        "title": "发送日志到 TCP 服务器",
+        "anchor": "发送日志到-tcp-服务器"
+      },
+      {
+        "title": "发送日志到 SkyWalking",
+        "anchor": "发送日志到-skywalking"
+      },
+      {
+        "title": "发送日志到 ClickHouse",
+        "anchor": "发送日志到-clickhouse"
+      },
+      {
+        "title": "发送日志到 Kafka",
+        "anchor": "发送日志到-kafka"
+      }
+    ]
+  },
+  "sls-logger": {
+    "overview": [
+      "sls-logger 是使用 RF5424 标准将日志数据以 JSON 格式发送到 阿里云日志服务 。",
+      "该插件提供了将 Log Data 作为批处理推送到阿里云日志服务器的功能。如果您没有收到日志数据，请放心一些时间，它会在我们的批处理处理器中的计时器功能到期后自动发送日志。"
+    ],
+    "fields": {
+      "route": {
+        "host": "TCP 服务的 IP 地址或主机名，请参考： 阿里云日志服务列表 ，建议配置 IP 取代配置域名。",
+        "port": "目标端口，阿里云日志服务默认端口为 10009。",
+        "timeout": "发送数据超时间。",
+        "log_format": "日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。",
+        "project": "日志服务 Project 名称，请提前在阿里云日志服务中创建 Project。",
+        "logstore": "日志服务 Logstore 名称，请提前在阿里云日志服务中创建 Logstore。",
+        "access_key_id": "AccessKey ID。建议使用阿里云子账号 AK，详情请参见 授权 。",
+        "access_key_secret": "AccessKey Secret。建议使用阿里云子账号 AK，详情请参见 授权 。",
+        "ssl_verify": "设置为 true 时校验日志服务器的 TLS 证书。默认为 true 。",
+        "include_req_body": "是否包含请求体。",
+        "include_req_body_expr": "当 include_req_body 属性设置为 true 时的过滤器。只有当此处设置的表达式求值为 true 时，才会记录请求体。有关更多信息，请参阅 lua-resty-expr 。",
+        "include_resp_body": "当设置为 true 时，日志中将包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 属性设置为 true 时进行过滤响应体，并且只有当此处设置的表达式计算结果为 true 时，才会记录响应体。更多信息，请参考 lua-resty-expr 。",
+        "name": "批处理名字。如果您使用 Prometheus 监视 APISIX 指标，名称将以 apisix_batch_process_entries 导出。"
+      }
+    },
+    "examples": []
+  },
+  "google-cloud-logging": {
+    "overview": [
+      "google-cloud-logging 插件将请求和响应日志批量推送到 Google Cloud Logging Service ，并支持自定义日志格式。"
+    ],
+    "fields": {
+      "route": {
+        "auth_config": "认证配置。 auth_config 和 auth_file 中至少需要提供一个。",
+        "auth_config.client_email": "Google Cloud 服务账号的电子邮件地址。",
+        "auth_config.private_key": "Google Cloud 服务账号的私钥。",
+        "auth_config.project_id": "Google Cloud 服务账号中的项目 ID。",
+        "auth_config.token_uri": "Google Cloud 服务账号的 Token URI。",
+        "auth_config.entries_uri": "Google Cloud Logging Service API。",
+        "auth_config.scope": "Google Cloud 服务账号的访问范围。参见 OAuth 2.0 Scopes for Google APIs 。",
+        "auth_file": "Google Cloud 服务账号认证 JSON 文件的路径。 auth_config 和 auth_file 中至少需要提供一个。",
+        "ssl_verify": "若为 true ，则验证服务器的 SSL 证书。",
+        "resource": "Google 监控资源。详情参见 MonitoredResource 。",
+        "log_id": "Google Cloud 日志 ID。详情参见 LogEntry 。",
+        "log_format": "以 JSON 键值对形式声明的自定义日志格式。值可通过 $ 前缀引用 APISIX 变量 或 NGINX 变量 。也可通过 插件元数据 全局配置日志格式。",
+        "name": "批处理器中插件的唯一标识符。如果使用 Prometheus 监控 APISIX 指标，该名称将在 apisix_batch_process_entries 中导出。",
+        "batch_max_size": "单批允许的日志条目数。达到此数量后，批次将被发送至日志服务。设置为 1 表示立即处理。",
+        "inactive_timeout": "在发送批次到日志服务之前等待新日志的最长时间（秒）。该值应小于 buffer_duration 。",
+        "buffer_duration": "在发送批次到日志服务之前，允许最早条目存在的最长时间（秒）。",
+        "retry_delay": "批次发送失败后重试的时间间隔（秒）。",
+        "max_retry_count": "在丢弃日志条目之前允许的最大重试次数。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用auth_config配置认证",
+        "anchor": "使用-auth_config-配置认证"
+      },
+      {
+        "title": "使用auth_file配置认证",
+        "anchor": "使用-auth_file-配置认证"
+      },
+      {
+        "title": "使用插件元数据自定义日志格式",
+        "anchor": "使用插件元数据自定义日志格式"
+      }
+    ]
+  },
+  "splunk-hec-logging": {
+    "overview": [
+      "splunk-hec-logging 插件将请求和响应上下文信息序列化为 Splunk Event Data 格式 并批量推送到 Splunk HTTP Event Collector（HEC） 。该插件还支持自定义日志格式。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint": "Splunk HEC endpoint 配置。",
+        "endpoint.uri": "Splunk HEC 事件收集器 API 端点。",
+        "endpoint.token": "Splunk HEC 鉴权 token。",
+        "endpoint.channel": "Splunk HEC 发送数据通道标识符。详情参见 About HTTP Event Collector Indexer Acknowledgment 。",
+        "endpoint.timeout": "Splunk HEC 发送数据超时时间（秒）。",
+        "endpoint.keepalive_timeout": "保持连接的超时时间（毫秒）。",
+        "ssl_verify": "若为 true ，则按照 OpenResty 文档 启用 SSL 验证。",
+        "log_format": "以 JSON 键值对形式声明的自定义日志格式。值可通过 $ 前缀引用 APISIX 变量 或 NGINX 变量 。也可通过 插件元数据 全局配置日志格式。",
+        "name": "批处理器中插件的唯一标识符。",
+        "batch_max_size": "单批允许的日志条目数。达到此数量后，批次将被发送至 Splunk HEC。设置为 1 表示立即处理。",
+        "inactive_timeout": "在发送批次到日志服务之前等待新日志的最长时间（秒）。该值应小于 buffer_duration 。",
+        "buffer_duration": "在发送批次到日志服务之前，允许最早条目存在的最长时间（秒）。",
+        "retry_delay": "批次发送失败后重试的时间间隔（秒）。",
+        "max_retry_count": "在丢弃日志条目之前允许的最大重试次数。"
+      }
+    },
+    "examples": [
+      {
+        "title": "推送日志到 Splunk",
+        "anchor": "推送日志到-splunk"
+      },
+      {
+        "title": "使用插件元数据记录请求和响应头",
+        "anchor": "使用插件元数据记录请求和响应头"
+      }
+    ]
+  },
+  "file-logger": {
+    "overview": [
+      "file-logger 插件可用于将日志数据存储到指定位置。",
+      "提示"
+    ],
+    "fields": {
+      "route": {
+        "path": "自定义输出文件路径。例如： logs/file.log 。",
+        "log_format": "日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。",
+        "include_req_body": "当设置为 true 时，日志中将包含请求体。如果请求体太大而无法在内存中保存，则由于 Nginx 的限制，无法记录请求体。",
+        "include_req_body_expr": "当 include_req_body 属性设置为 true 时的过滤器。只有当此处设置的表达式求值为 true 时，才会记录请求体。有关更多信息，请参阅 lua-resty-expr 。",
+        "include_resp_body": "当设置为 true 时，生成的文件包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 属性设置为 true 时，使用该属性并基于 lua-resty-expr 进行过滤。如果存在，则仅在表达式计算结果为 true 时记录响应。",
+        "match": "当设置了这个选项后，只有匹配规则的日志才会被记录。 match 是一个表达式列表，具体请参考 lua-resty-expr 。"
+      }
+    },
+    "examples": []
+  },
+  "loggly": {
+    "overview": [
+      "loggly 插件可用于将日志转发到 SolarWinds Loggly 进行分析和存储。",
+      "当启用插件时，APISIX 会将请求上下文信息序列化为符合 Loggly Syslog 的数据格式，即具有 RFC5424 兼容标头的 Syslog。"
+    ],
+    "fields": {
+      "route": {
+        "customer_token": "将日志发送到 Loggly 时使用的唯一标识符，以确保将日志发送到正确的组织帐户。",
+        "severity": "Syslog 日志事件的严重性级别。包括： DEBUG 、 INFO 、 NOTICE 、 WARNING 、 ERR 、 CRIT 、 ALERT 和 EMEGR 。",
+        "severity_map": "一种将上游 HTTP 响应代码映射到 Syslog 中的方法。 key-value ，其中 key 是 HTTP 响应代码， value 是 Syslog 严重级别。例如 {\"410\": \"CRIT\"} 。",
+        "tags": "元数据将包含在任何事件日志中，以帮助进行分段和过滤。",
+        "include_req_body": "当设置为 true 时，包含请求体。 注意 ：如果请求体无法完全存放在内存中，由于 NGINX 的限制，APISIX 无法将它记录下来。",
+        "include_req_body_expr": "当 include_req_body 属性设置为 true 时的过滤器。只有当此处设置的表达式求值为 true 时，才会记录请求体。有关更多信息，请参阅 lua-resty-expr 。",
+        "include_resp_body": "当设置为 true 时，包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 属性设置为 true 时进行过滤响应体，并且只有当此处设置的表达式计算结果为 true 时，才会记录响应体。更多信息，请参考 lua-resty-expr 。"
+      }
+    },
+    "examples": []
+  },
+  "loki-logger": {
+    "overview": [
+      "loki-logger 插件通过 Loki HTTP API /loki/api/v1/push 将请求和响应日志批量推送到 Grafana Loki 。该插件还支持自定义日志格式。",
+      "启用后，插件会将请求上下文信息序列化为 JSON object 并将其添加到队列中，然后再将其推送到 Loki。有关更多详细信息，请参阅批处理处理器 batch processor 。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint_addrs": "Loki API URL，例如 http://127.0.0.1:3100 。如果配置了多个端点，日志将被推送到列表中随机确定的端点。",
+        "endpoint_uri": "Loki 提取端点的 URI 路径。",
+        "tenant_id": "Loki 租户 ID。根据 Loki 的 多租户文档 ，在单租户下默认值设置为 fake 。",
+        "headers": "请求头键值对（对 X-Scope-OrgID 和 Content-Type 的设置将会被忽略）。",
+        "log_labels": "Loki 日志标签。支持 NGINX 变量 和值中的常量字符串。变量应以 $ 符号为前缀。例如，标签可以是 {\"origin\" = \"apisix\"} 或 {\"origin\" = \"$remote_addr\"} 。",
+        "ssl_verify": "如果为 true，则验证 Loki 的 SSL 证书。",
+        "timeout": "Loki 服务 HTTP 调用的超时时间（以毫秒为单位）。",
+        "keepalive": "如果为 true，则保持连接以应对多个请求。",
+        "keepalive_timeout": "Keepalive 超时时间（以毫秒为单位）。",
+        "keepalive_pool": "连接池中的最大连接数。",
+        "log_format": "自定义日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过 $ 前缀引用 APISIX 变量 和 NGINX 变量 。",
+        "name": "批处理器插件的唯一标识符。如果使用 Prometheus 监控 APISIX 指标，则名称会导出到 apisix_batch_process_entries 。",
+        "include_req_body": "如果为 true，则将请求正文包含在日志中。请注意，如果请求正文太大而无法保存在内存中，则由于 NGINX 的限制而无法记录。",
+        "include_req_body_expr": "一个或多个 lua-resty-expr 形式条件的数组。在 include_req_body 为 true 时使用。仅当此处配置的表达式计算结果为 true 时，才会记录请求正文。",
+        "max_req_body_bytes": "记录请求正文的最大字节数。如果请求正文超过此值，则会在记录前截断。",
+        "include_resp_body": "如果为 true，则将响应正文包含在日志中。",
+        "include_resp_body_expr": "一个或多个 lua-resty-expr 形式条件的数组。在 include_resp_body 为 true 时使用。仅当此处配置的表达式计算结果为 true 时，才会记录响应正文。",
+        "max_resp_body_bytes": "记录响应正文的最大字节数。如果响应正文超过此值，则会在记录前截断。"
+      }
+    },
+    "examples": [
+      {
+        "title": "以默认日志格式记录请求和响应",
+        "anchor": "以默认日志格式记录请求和响应"
+      },
+      {
+        "title": "使用 Plugin Metadata 自定义日志格式",
+        "anchor": "使用-plugin-metadata-自定义日志格式"
+      },
+      {
+        "title": "有条件地记录请求主体",
+        "anchor": "有条件地记录请求主体"
+      }
+    ]
+  },
+  "elasticsearch-logger": {
+    "overview": [
+      "elasticsearch-logger 插件将请求和响应日志批量推送到 Elasticsearch ，并支持自定义日志格式。启用后，插件会将请求上下文信息序列化为 Elasticsearch Bulk 格式 并将其添加到队列中，然后再推送到 Elasticsearch。有关更多详细信息，请参阅 批处理器 。"
+    ],
+    "fields": {
+      "route": {
+        "endpoint_addrs": "Elasticsearch API 端点地址。如果配置了多个端点，则会随机写入。",
+        "field": "Elasticsearch 字段配置。",
+        "field.index": "Elasticsearch _index 字段 。支持在花括号中使用 Lua 时间格式 来包含当前日期（例如 service-{%Y-%m-%d} ），以及使用 $ 前缀引用 APISIX 变量 （例如 service-$host-{%Y.%m.%d} ）。",
+        "log_format": "自定义日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过 $ 前缀引用 APISIX 或 NGINX 变量 。",
+        "auth": "Elasticsearch 身份验证 配置。",
+        "auth.username": "Elasticsearch 身份验证 用户名​​。当配置 auth 时必填，需与 auth.password 成对配置。",
+        "auth.password": "Elasticsearch 身份验证 密码。当配置 auth 时必填，需与 auth.username 成对配置。该密钥在存储到 etcd 之前会使用 AES 加密。",
+        "headers": "自定义 HTTP 请求标头，以键值对形式包含在发送给 Elasticsearch 的请求中。可作为 auth 的替代或补充，用于身份验证和其他目的。这些值在存储到 etcd 之前会使用 AES 加密。在 APISIX 3.16.0 中可用。",
+        "ssl_verify": "如果为 true，则执行 SSL 验证。",
+        "timeout": "Elasticsearch 发送数据超时（秒）。",
+        "include_req_body": "如果为 true，则将请求主体包含在日志中。请注意，如果请求主体太大而无法保存在内存中，则由于 NGINX 的限制而无法记录。",
+        "include_req_body_expr": "一个或多个条件的数组，形式为 lua-resty-expr 。在 include_req_body 为 true 时使用。仅当此处配置的表达式计算结果为 true 时，才会记录请求主体。",
+        "max_req_body_bytes": "记录请求主体的最大字节数。如果请求主体超过此值，则会在记录前截断。在 APISIX 3.16.0 中可用。",
+        "include_resp_body": "如果为 true，则将响应主体包含在日志中。",
+        "include_resp_body_expr": "一个或多个条件的数组，形式为 lua-resty-expr 。在 include_resp_body 为 true 时使用。仅当此处配置的表达式计算结果为 true 时，才会记录响应主体。",
+        "max_resp_body_bytes": "记录响应主体的最大字节数。如果响应主体超过此值，则会在记录前截断。在 APISIX 3.16.0 中可用。"
+      }
+    },
+    "examples": [
+      {
+        "title": "以默认日志格式记录",
+        "anchor": "以默认日志格式记录"
+      },
+      {
+        "title": "使用 Plugin Metadata 自定义日志格式",
+        "anchor": "使用-plugin-metadata-自定义日志格式"
+      },
+      {
+        "title": "有条件地记录请求主体",
+        "anchor": "有条件地记录请求主体"
+      },
+      {
+        "title": "在 Elasticsearch 索引中包含请求日期",
+        "anchor": "在-elasticsearch-索引中包含请求日期"
+      }
+    ]
+  },
+  "tencent-cloud-cls": {
+    "overview": [
+      "tencent-cloud-cls 插件可用于将 APISIX 日志使用 腾讯云日志服务 API 推送到您的日志主题。"
+    ],
+    "fields": {
+      "route": {
+        "cls_host": "CLS API 域名，参考 使用 API 上传日志 。",
+        "cls_topic": "CLS 日志主题 id。",
+        "scheme": "连接 CLS 时使用的协议方案。默认为 https 以实现安全连接。",
+        "secret_id": "云 API 密钥的 id。",
+        "secret_key": "云 API 密钥的 key。",
+        "sample_ratio": "采样的比例。设置为 1 时，将对所有请求进行采样。",
+        "include_req_body": "当设置为 true 时，日志中将包含请求体。",
+        "include_req_body_expr": "当 include_req_body 属性设置为 true 时的过滤器。只有当此处设置的表达式求值为 true 时，才会记录请求体。有关更多信息，请参阅 lua-resty-expr 。",
+        "include_resp_body": "当设置为 true 时，日志中将包含响应体。",
+        "include_resp_body_expr": "当 include_resp_body 属性设置为 true 时进行过滤响应体，并且只有当此处设置的表达式计算结果为 true 时，才会记录响应体。更多信息，请参考 lua-resty-expr 。",
+        "global_tag": "kv 形式的 JSON 数据，可以写入每一条日志，便于在 CLS 中检索。",
+        "log_format": "日志格式以 JSON 的键值对声明。值支持字符串和嵌套对象（最多五层，超出部分将被截断）。字符串中可通过在前面加上 $ 来引用 APISIX 变量 或 NGINX 内置变量 。"
+      }
+    },
+    "examples": []
+  },
+  "serverless": {
+    "overview": [
+      "无服务器函数由两个插件组成： serverless-pre-function 和 serverless-post-function 。这些插件支持在 执行阶段 的开始和结束时执行用户定义的逻辑。"
+    ],
+    "fields": {
+      "route": {
+        "phase": "执行 serverless 函数之前或之后的阶段。",
+        "functions": "按顺序执行的函数列表。"
+      }
+    },
+    "examples": [
+      {
+        "title": "在阶段前后记录信息",
+        "anchor": "在阶段前后记录信息"
+      }
+    ]
+  },
+  "azure-functions": {
+    "overview": [
+      "azure-functions 插件用于将 Azure Serverless Function 作为动态上游集成至 APISIX，从而实现将访问指定 URI 的请求代理到 Microsoft Azure 云服务。",
+      "启用 azure-functions 插件后，该插件会终止对已配置 URI 的请求，并代表客户端向 Azure Functions 发起一个新的请求。该新请求中携带了之前配置的授权详细信息，包括请求头、请求体和参数（以上参数都是从原始请求中传递的）。之后便会通过 azure-functions 插件，将带有响应头、状态码和响应体的信息返回给使用 APISIX 发起请求的客户端。"
+    ],
+    "fields": {
+      "route": {
+        "function_uri": "触发 Serverless Functions 的 Azure Functions 端点。例如 http://test-apisix.azurewebsites.net/api/HttpTrigger 。",
+        "authorization": "访问 Azure Functions 的授权凭证。",
+        "authorization.apikey": "授权凭证内的字段。生成 API 密钥来授权对端点的请求。",
+        "authorization.clientid": "授权凭证内的字段。生成客户端 ID（Azure Active Directory）来授权对端点的请求。",
+        "timeout": "代理请求超时（以毫秒为单位）。",
+        "ssl_verify": "当设置为 true 时执行 SSL 验证。",
+        "keepalive": "当设置为 true 时，保持连接的活动状态以便重复使用。",
+        "keepalive_pool": "连接断开之前，可接收的最大请求数。",
+        "keepalive_timeout": "当连接空闲时，保持该连接处于活动状态的时间（以毫秒为单位）。"
+      }
+    },
+    "examples": []
+  },
+  "openwhisk": {
+    "overview": [
+      "openwhisk 插件用于将开源的分布式无服务器平台 Apache OpenWhisk 作为动态上游集成至 APISIX。",
+      "启用 openwhisk 插件后，该插件会终止对已配置 URI 的请求，并代表客户端向 OpenWhisk 的 API Host 端点发起一个新的请求，然后 openwhisk 插件会将响应信息返回至客户端。"
+    ],
+    "fields": {
+      "route": {
+        "api_host": "OpenWhisk API Host 地址，例如 https://localhost:3233 。",
+        "ssl_verify": "当设置为 true 时执行 SSL 验证。",
+        "service_token": "OpenWhisk service token，其格式为 xxx:xxx ，用于 API 调用时的身份认证。",
+        "namespace": "OpenWhisk namespace，例如 guest 。",
+        "action": "OpenWhisk action，例如 hello 。",
+        "result": "当设置为 true 时，获得 action 元数据（执行函数并获得响应结果）。",
+        "timeout": "OpenWhisk action 和 HTTP 调用超时时间（以毫秒为单位）。",
+        "keepalive": "当设置为 true 时，保持连接的活动状态以便重复使用。",
+        "keepalive_timeout": "当连接空闲时，保持该连接处于活动状态的时间（以毫秒为单位）。",
+        "keepalive_pool": "连接断开之前，可接收的最大请求数。"
+      }
+    },
+    "examples": []
+  },
+  "aws-lambda": {
+    "overview": [
+      "aws-lambda 插件简化了 APISIX 与 AWS Lambda 和 Amazon API Gateway 的集成，用于代理至其他 AWS 服务。",
+      "该插件支持通过 IAM 用户凭证和 API Gateway 的 API 密钥进行 AWS 身份验证和授权。"
+    ],
+    "fields": {
+      "route": {
+        "function_uri": "触发 Lambda 函数的 AWS Lambda 函数 URL 或 Amazon API Gateway 端点。",
+        "authorization": "在 AWS 上调用 Lambda 函数时用于身份验证和授权的凭证。",
+        "authorization.apikey": "选择 API 密钥作为安全机制时，REST API Gateway 的 API 密钥。",
+        "authorization.iam": "使用 AWS Signature Version 4 进行身份验证和授权的 IAM 凭证。",
+        "authorization.iam.accesskey": "IAM 用户访问密钥。当配置 authorization.iam 时必填。",
+        "authorization.iam.secretkey": "IAM 用户秘密访问密钥。当配置 authorization.iam 时必填。",
+        "authorization.iam.aws_region": "发送请求的 AWS 区域。",
+        "authorization.iam.service": "接收请求的服务。与 AWS API Gateway 集成时设置为 execute-api ，直接与 Lambda 函数集成时设置为 lambda 。",
+        "timeout": "代理请求超时时间，单位为毫秒。",
+        "ssl_verify": "若为 true，执行 SSL 验证。",
+        "keepalive": "若为 true，保持连接以便复用。",
+        "keepalive_pool": "保活连接池中的最大连接数。",
+        "keepalive_timeout": "连接空闲时保持活跃的时间，单位为毫秒。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用 IAM 访问密钥安全调用 Lambda 函数",
+        "anchor": "使用-iam-访问密钥安全调用-lambda-函数"
+      },
+      {
+        "title": "通过 API 密钥与 Amazon API Gateway 安全集成",
+        "anchor": "通过-api-密钥与-amazon-api-gateway-安全集成"
+      },
+      {
+        "title": "将请求转发到 Amazon API Gateway 子路径",
+        "anchor": "将请求转发到-amazon-api-gateway-子路径"
+      }
+    ]
+  },
+  "workflow": {
+    "overview": [
+      "workflow 插件支持根据给定的规则集有条件地执行对客户端流量的用户定义操作，这些规则集使用 lua-resty-expr 定义。这为流量管理提供了一种细粒度的方法。"
+    ],
+    "fields": {
+      "route": {
+        "rules": "一对或多对匹配条件和要执行的操作组成的数组。",
+        "rules.case": "一个或多个匹配条件的数组，形式为 lua-resty-expr ，例如 {\"arg_name\", \"==\", \"json\"} 。",
+        "rules.actions": "条件匹配成功后要执行的操作的数组。目前数组只支持一个操作，必须是 return 、 limit-count 或 limit-conn 。当操作配置为 return 时，可以配置条件匹配成功时返回给客户端的 HTTP 状态码。当操作配置为 limit-count 时，可以配置 limit-count 插件除 group 之外的所有选项。当操作配置为 limit-conn 时，可以配置 limit-conn 插件的所有选项。"
+      }
+    },
+    "examples": [
+      {
+        "title": "有条件地返回响应 HTTP 状态码",
+        "anchor": "有条件地返回响应-http-状态码"
+      },
+      {
+        "title": "通过 URI 和查询参数有条件地应用速率限制",
+        "anchor": "通过-uri-和查询参数有条件地应用速率限制"
+      },
+      {
+        "title": "按消费者有条件地应用速率限制",
+        "anchor": "按消费者有条件地应用速率限制"
+      }
+    ]
+  },
+  "openfunction": {
+    "overview": [
+      "openfunction 插件用于将开源的分布式无服务器平台 CNCF OpenFunction 作为动态上游集成至 APISIX。",
+      "启用 openfunction 插件后，该插件会终止对已配置 URI 的请求，并代表客户端向 OpenFunction 的 function 发起一个新的请求，然后 openfunction 插件会将响应信息返回至客户端。"
+    ],
+    "fields": {
+      "route": {
+        "function_uri": "OpenFunction function uri，例如 https://localhost:30858/default/function-sample 。",
+        "ssl_verify": "当设置为 true 时执行 SSL 验证。",
+        "authorization": "访问 OpenFunction 的函数的授权凭证。",
+        "authorization.service_token": "OpenFunction service token，其格式为 xxx:xxx ，支持函数入口的 basic auth 认证方式。",
+        "timeout": "OpenFunction action 和 HTTP 调用超时时间，以毫秒为单位。",
+        "keepalive": "当设置为 true 时，保持连接的活动状态以便重复使用。",
+        "keepalive_timeout": "当连接空闲时，保持该连接处于活动状态的时间，以毫秒为单位。",
+        "keepalive_pool": "连接断开之前，可接收的最大请求数。"
+      }
+    },
+    "examples": []
+  },
+  "dubbo-proxy": {
+    "overview": [
+      "dubbo-proxy 插件允许将 HTTP 请求代理到 dubbo 。"
+    ],
+    "fields": {
+      "route": {
+        "service_name": "dubbo 服务名字",
+        "service_version": "dubbo 服务版本",
+        "method": "dubbo 服务方法"
+      }
+    },
+    "examples": []
+  },
+  "http-dubbo": {
+    "overview": [
+      "http-dubbo 插件可以将 http 请求 encode 为 dubbo 协议转发给上游服务（注意：在 dubbo2.x 时上游服务的序列化类型必须是 fastjson)"
+    ],
+    "fields": {
+      "route": {
+        "service_name": "dubbo 服务名",
+        "service_version": "dubbo 服务版本 默认 0.0.0",
+        "method": "dubbo 服务方法名",
+        "params_type_desc": "dubbo 服务方法签名描述，入参如果是 void 可不填写",
+        "serialization_header_key": "插件会读取该请求头判断 body 是否已经按照 dubbo 协议序列化完毕。如果该请求头的值为 true 则插件不会更改 body 内容，直接把他当作 dubbo 请求参数。如果为 false 则要求开发者按照 dubbo 泛化调用的格式传递参数，由插件进行序列化。注意：由于 lua 和 java 的插件序列化精度不同，可能会导致参数精度不同。",
+        "serialized": "和 serialization_header_key 一样。优先级低于 serialization_header_key",
+        "connect_timeout": "上游服务 tcp connect_timeout",
+        "read_timeout": "上游服务 tcp read_timeout",
+        "send_timeout": "上游服务 tcp send_timeout"
+      }
+    },
+    "examples": []
+  },
+  "mqtt-proxy": {
+    "overview": [
+      "mqtt-proxy 插件是一个 L4 插件，支持将 MQTT 请求代理和负载均衡到 MQTT 服务器。它支持 MQTT 3.1.* 和 5.0 版本。该插件必须配置在流式路由上，且 APISIX 需要启用 L4 流量代理。"
+    ],
+    "fields": {
+      "route": {
+        "protocol_name": "协议名称。",
+        "protocol_level": "协议级别。MQTT 3.1.* 应设为 4 ，MQTT 5.0 应设为 5 。"
+      }
+    },
+    "examples": [
+      {
+        "title": "代理到 MQTT Broker",
+        "anchor": "代理到-mqtt-broker"
+      },
+      {
+        "title": "对 MQTT 流量进行负载均衡",
+        "anchor": "对-mqtt-流量进行负载均衡"
+      },
+      {
+        "title": "创建使用 mqtt-proxy 插件和 mTLS 的 stream_route",
+        "anchor": "创建使用-mqtt-proxy-插件和-mtls-的-stream_route"
+      }
+    ]
+  },
+  "kafka-proxy": {
+    "overview": [
+      "The kafka-proxy plugin can be used to configure advanced parameters for the kafka upstream of Apache APISIX, such as SASL authentication."
+    ],
+    "fields": {
+      "route": {
+        "sasl": "SASL/PLAIN authentication configuration, when this configuration exists, turn on SASL authentication; this object will contain two parameters username and password, they must be configured.",
+        "sasl.username": "SASL/PLAIN authentication username",
+        "sasl.password": "SASL/PLAIN authentication password"
+      }
+    },
+    "examples": []
+  },
+  "batch-requests": {
+    "overview": [
+      "在启用 batch-requests 插件后，用户可以通过将多个请求组装成一个请求的形式，把请求发送给网关，网关会从请求体中解析出对应的请求，再分别封装成独立的请求，以 HTTP pipeline 的方式代替用户向网关自身再发起多个 HTTP 请求，经历路由匹配，转发到对应上游等多个阶段，合并结果后再返回客户端。",
+      ""
+    ],
+    "fields": {
+      "route": {
+        "query": "给所有请求都携带的 query string 。",
+        "headers": "给所有请求都携带的 header 。",
+        "timeout": "聚合请求的超时时间，单位为 ms 。",
+        "pipeline": "HTTP 请求的详细信息。",
+        "version": "请求所使用的 HTTP 协议版本。",
+        "method": "请求使用的 HTTP 方法。",
+        "path": "HTTP 请求路径。",
+        "body": "HTTP 请求体。",
+        "ssl_verify": "验证 SSL 证书与主机名是否匹配。",
+        "status": "HTTP 请求的状态码。",
+        "reason": "HTTP 请求的返回信息。"
+      }
+    },
+    "examples": []
+  },
+  "redirect": {
+    "overview": [
+      "redirect 插件可用于配置 URI 重定向。"
+    ],
+    "fields": {
+      "route": {
+        "http_to_https": "当设置为 true 并且请求是 HTTP 时，它将被重定向具有相同 URI 和 301 状态码的 HTTPS，原 URI 的查询字符串也将包含在 Location 头中。",
+        "uri": "要重定向到的 URI，可以包含 NGINX 变量。例如： /test/index.htm ， $uri/index.html ， ${uri}/index.html ， https://example.com/foo/bar 。如果你引入了一个不存在的变量，它不会报错，而是将其视为一个空变量。",
+        "regex_uri": "将来自客户端的 URL 与正则表达式匹配并重定向。当匹配成功后使用模板替换发送重定向到客户端，如果未匹配成功会将客户端请求的 URI 转发至上游。和 regex_uri 不可以同时存在。例如：[”^/iresty/(.)/(.)/(.*)”,”/$1-$2-$3”] 第一个元素代表匹配来自客户端请求的 URI 正则表达式，第二个元素代表匹配成功后发送重定向到客户端的 URI 模板。",
+        "ret_code": "HTTP 响应码",
+        "encode_uri": "当设置为 true 时，对返回的 Location Header 按照 RFC3986 的编码格式进行编码。",
+        "append_query_string": "当设置为 true 时，将原始请求中的查询字符串添加到 Location Header。如果已配置 uri 或 regex_uri 已经包含查询字符串，则请求中的查询字符串将附加一个 & 。如果你已经处理过查询字符串（例如，使用 NGINX 变量 $request_uri ），请不要再使用该参数以避免重复。"
+      }
+    },
+    "examples": []
+  },
+  "echo": {
+    "overview": [
+      "echo 插件可以帮助用户尽可能地全面了解如何开发 APISIX 插件。",
+      "该插件展示了如何在常见的 phase 中实现相应的功能，常见的 phase 包括：init, rewrite, access, balancer, header filter, body filter 以及 log。"
+    ],
+    "fields": {
+      "route": {
+        "before_body": "在 body 属性之前添加的内容，如果 body 属性没有指定，就会将其添加在上游 response body 之前。",
+        "body": "返回给客户端的响应内容，它将覆盖上游返回的响应 body 。",
+        "after_body": "在 body 属性之后添加的内容，如果 body 属性没有指定将在上游响应 body 之后添加。",
+        "headers": "返回值的 headers。"
+      }
+    },
+    "examples": []
+  },
+  "gzip": {
+    "overview": [
+      "gzip 插件能动态设置 NGINX 的压缩行为。\n当启用 gzip 插件时，客户端在发起请求时需要在请求头中添加 Accept-Encoding: gzip ，以表明客户端支持 gzip 压缩。APISIX 在接收到请求后，会根据客户端的支持情况和服务器配置动态判断是否对响应内容进行 gzip 压缩。如果判定条件得到满足，APISIX 将在响应头中添加 Content-Encoding: gzip 字段，以指示响应内容已经通过 gzip 压缩。在客户端接收到响应后，根据响应头中的 Content-Encoding 字段使用相应的解压缩算法对响应内容进行解压，从而获取原始的响应内容。",
+      "IMPORTANT"
+    ],
+    "fields": {
+      "route": {
+        "types": "动态设置 gzip_types 指令，特殊值 \"*\" 匹配任何 MIME 类型。",
+        "min_length": "动态设置 gzip_min_length 指令。",
+        "comp_level": "动态设置 gzip_comp_level 指令。",
+        "http_version": "动态设置 gzip_http_version 指令。",
+        "buffers.number": "动态设置 gzip_buffers 指令 参数 number 。",
+        "buffers.size": "动态设置 gzip_buffers 指令参数 size 。单位为字节。",
+        "vary": "动态设置 gzip_vary 指令。"
+      }
+    },
+    "examples": []
+  },
+  "brotli": {
+    "overview": [
+      "brotli 插件可以动态的设置 Nginx 中的 brotli 的行为。"
+    ],
+    "fields": {
+      "route": {
+        "types": "动态设置 brotli_types 指令。特殊值 \"*\" 用于匹配任意的 MIME 类型。",
+        "min_length": "动态设置 brotli_min_length 指令。",
+        "comp_level": "动态设置 brotli_comp_level 指令。",
+        "mode": "动态设置 brotli decompress mode ，更多信息参考 RFC 7932 。",
+        "lgwin": "动态设置 brotli sliding window size ， lgwin 是滑动窗口大小的以 2 为底的对数，将其设置为 0 会让压缩器自行决定最佳值，更多信息请参考 RFC 7932 。",
+        "lgblock": "动态设置 brotli input block size ， lgblock 是最大输入块大小的以 2 为底的对数，将其设置为 0 会让压缩器自行决定最佳值，更多信息请参考 RFC 7932 。",
+        "http_version": "与 gzip_http_version 指令类似，用于识别 http 的协议版本。",
+        "vary": "与 gzip_vary 指令类似，用于启用或禁用 Vary: Accept-Encoding 响应头。"
+      }
+    },
+    "examples": []
+  },
+  "real-ip": {
+    "overview": [
+      "real-ip 插件允许 APISIX 通过 HTTP 请求头或 HTTP 查询字符串中传递的 IP 地址设置客户端的真实 IP。当 APISIX 位于反向代理之后时，此功能尤其有用，因为在这种情况下，代理可能会被视为请求发起客户端。",
+      "该插件在功能上类似于 NGINX 的 ngx_http_realip_module ，但提供了更多的灵活性。"
+    ],
+    "fields": {
+      "route": {
+        "source": "内置变量，例如 http_x_forwarded_for 或 arg_realip 。变量值应为一个有效的 IP 地址，表示客户端的真实 IP 地址，可选地包含端口。",
+        "trusted_addresses": "已知会发送正确替代地址的可信地址。此配置设置 set_real_ip_from 指令。",
+        "recursive": "如果为 false，则将匹配可信地址之一的原始客户端地址替换为配置的 source 中发送的最后一个地址。 如果为 true，则将匹配可信地址之一的原始客户端地址替换为配置的 source 中发送的最后一个非可信地址。"
+      }
+    },
+    "examples": [
+      {
+        "title": "从 URI 参数获取真实客户端地址",
+        "anchor": "从-uri-参数获取真实客户端地址"
+      },
+      {
+        "title": "从请求头获取真实客户端地址",
+        "anchor": "从请求头获取真实客户端地址"
+      },
+      {
+        "title": "在多个代理之后获取真实客户端地址",
+        "anchor": "在多个代理之后获取真实客户端地址"
+      }
+    ]
+  },
+  "server-info": {
+    "overview": [
+      "server-info 插件可以定期将服务基本信息上报至 etcd。",
+      "WARNING"
+    ],
+    "fields": {
+      "route": {
+        "boot_time": "APISIX 服务实例的启动时间（UNIX 时间戳），如果对 APISIX 进行热更新操作，该值将被重置。普通的 reload 操作不会影响该值。",
+        "id": "APISIX 服务实例 id。",
+        "etcd_version": "etcd 集群的版本信息，如果 APISIX 和 etcd 集群之间存在网络分区，该值将设置为 \"unknown\" 。",
+        "version": "APISIX 版本信息。",
+        "hostname": "部署 APISIX 的主机或 Pod 的主机名信息。",
+        "report_ttl": "etcd 中服务信息保存的 TTL（单位：秒，最大值：86400，最小值：3）。"
+      }
+    },
+    "examples": []
+  },
+  "inspect": {
+    "overview": [
+      "It’s useful to set arbitrary breakpoint in any Lua file to inspect the context information,\ne.g. print local variables if some condition satisfied.",
+      "In this way, you don’t need to modify the source code of your project, and just get diagnose information\non demand, i.e. dynamic logging."
+    ],
+    "fields": {
+      "route": {
+        "delay": "Time in seconds specifying how often to check the hooks file.",
+        "hooks_file": "Lua file to define hooks, which could be a link file. Ensure only administrator could write this file, otherwise it may be a security risk."
+      }
+    },
+    "examples": []
+  },
+  "lago": {
+    "overview": [
+      "The lago plugin pushes requests and responses to Lago Self-hosted and Lago Cloud via the Lago REST API. the plugin allows you to use it with a variety of APISIX built-in features, such as the APISIX consumer and the request-id plugin.",
+      "This allows for API monetization or let APISIX to be an AI gateway for AI tokens billing scenarios."
+    ],
+    "fields": {
+      "route": {
+        "endpoint_addrs": "Lago API address, such as http://127.0.0.1:3000 . It supports both self-hosted Lago and Lago Cloud. If multiple endpoints are configured, the log will be pushed to a randomly selected endpoint from the list.",
+        "endpoint_uri": "Lago API endpoint for batch usage events .",
+        "token": "Lago API key created in the Lago dashboard.",
+        "event_transaction_id": "Event’s transaction ID, used to identify and de-duplicate the event. It supports string templates containing APISIX and NGINX variables, such as req_${request_id} , which allows you to use values returned by upstream services or the request-id plugin.",
+        "event_subscription_id": "Event’s subscription ID, which is automatically generated or configured when you assign the plan to the customer on Lago. This is used to associate API consumption to a customer subscription and supports string templates containing APISIX and NGINX variables, such as cus_${consumer_name} , which allows you to use values returned by upstream services or APISIX consumer.",
+        "event_code": "Lago billable metric’s code for associating an event to a specified billable item.",
+        "event_properties": "Event’s properties, used to attach information to an event. This allows you to send certain information on an event to Lago, such as the HTTP status to exclude failed requests from billing, or the AI token consumption in the response body for accurate billing. The keys are fixed strings, while the values can be string templates containing APISIX and NGINX variables, such as ${status} .",
+        "ssl_verify": "If true, verify Lago’s SSL certificates.",
+        "timeout": "Timeout for the Lago service HTTP call in milliseconds.",
+        "keepalive": "If true, keep the connection alive for multiple requests.",
+        "keepalive_timeout": "Keepalive timeout in milliseconds.",
+        "keepalive_pool": "Maximum number of connections in the connection pool."
+      }
+    },
+    "examples": [
+      {
+        "title": "Report API call usage",
+        "anchor": "report-api-call-usage"
+      }
+    ]
+  },
+  "ext-plugin-pre-req": {
+    "overview": [
+      "ext-plugin-pre-req 插件用于在执行内置 Lua 插件之前和在 Plugin Runner 内运行特定的 External Plugin。",
+      "如果你想了解更多关于 External Plugin 的信息，请参考 External Plugin 。"
+    ],
+    "fields": {
+      "route": {
+        "conf": "在 Plugin Runner 内执行的插件列表的配置。",
+        "allow_degradation": "当 Plugin Runner 临时不可用时是否允许请求继续，当值设置为 true 时则自动允许请求继续。"
+      }
+    },
+    "examples": []
+  },
+  "ext-plugin-post-req": {
+    "overview": [
+      "ext-plugin-post-req 插件的功能与 ext-plugin-pre-req 插件的不同之处在于： ext-plugin-post-req 插件是在内置 Lua 插件执行之后且在请求到达上游之前工作。",
+      "你可以参考 ext-plugin-pre-req 文档，学习如何配置和使用 ext-plugin-post-req 插件。"
+    ],
+    "fields": {},
+    "examples": []
+  },
+  "ext-plugin-post-resp": {
+    "overview": [
+      "ext-plugin-post-resp 插件用于在执行内置 Lua 插件之前和在 Plugin Runner 内运行特定的 External Plugin。",
+      "ext-plugin-post-resp 插件将在请求获取到上游的响应之后执行。"
+    ],
+    "fields": {
+      "route": {
+        "conf": "在 Plugin Runner 内执行的插件列表的配置。",
+        "allow_degradation": "当 Plugin Runner 临时不可用时是否允许请求继续，当值设置为 true 时则自动允许请求继续。"
+      }
+    },
+    "examples": []
+  },
+  "acl": {
+    "overview": [
+      "acl 插件为 API 路由提供基于标签的访问控制。它检查 APISIX 消费者 的标签，或来自外部认证插件（设置了 ctx.external_user ）的用户属性，并与配置的允许列表或拒绝列表进行比对。",
+      "插件支持三种标签值格式："
+    ],
+    "fields": {
+      "route": {
+        "allow_labels": "允许的标签。键为标签名，值为允许的标签值数组。 allow_labels 和 deny_labels 至少需配置其中一个。",
+        "deny_labels": "拒绝的标签。键为标签名，值为拒绝的标签值数组。 allow_labels 和 deny_labels 至少需配置其中一个。",
+        "rejected_code": "请求被拒绝时返回的 HTTP 状态码。",
+        "rejected_msg": "自定义拒绝消息体。若未设置，默认返回 {\"message\":\"The consumer is forbidden.\"} 。",
+        "external_user_label_field": "用于从 ctx.external_user 提取标签值的 JSONPath 表达式或普通字段名称。例如， $..groups （JSONPath）或 groups （字段名称）。",
+        "external_user_label_field_key": "提取值所使用的标签键名。默认为 external_user_label_field 的值。",
+        "external_user_label_field_parser": "提取字段值的解析方式。若未设置，插件自动检测格式。",
+        "external_user_label_field_separator": "segmented_text 解析器使用的分隔符（正则表达式）。当 external_user_label_field_parser 为 segmented_text 时必填。"
+      }
+    },
+    "examples": [
+      {
+        "title": "按标签允许消费者",
+        "anchor": "按标签允许消费者"
+      },
+      {
+        "title": "按标签拒绝消费者",
+        "anchor": "按标签拒绝消费者"
+      },
+      {
+        "title": "自定义拒绝状态码和消息",
+        "anchor": "自定义拒绝状态码和消息"
+      }
+    ]
+  },
+  "ai-cache": {
+    "overview": [
+      "ai-cache 插件缓存 LLM 响应，并在后续解析到相同提示词的请求中重放这些响应，从而为重复性工作负载（FAQ 机器人、文档问答、翻译等）降低上游的 Token 消耗与延迟。",
+      "该插件支持两个缓存层："
+    ],
+    "fields": {
+      "route": {
+        "exact.ttl": "精确缓存条目的存活时间（TTL），单位为秒。",
+        "cache_key.share_across_routes": "默认情况下缓存按路由隔离。如果为 true，则计算出相同缓存键的所有路由之间共享缓存条目。",
+        "cache_key.include_consumer": "如果为 true，则按消费者隔离缓存，使缓存条目不会在不同消费者之间共享。",
+        "cache_key.include_vars": "加入缓存作用域的 NGINX 变量（例如 [\"http_x_tenant\"] ），按其取值隔离缓存条目。",
+        "max_cache_body_size": "允许缓存的最大响应体大小，单位为字节。超过该大小的响应不会被缓存。",
+        "cache_headers": "如果为 true，则输出以下响应头： X-AI-Cache-Status （始终输出），取值为 MISS 、 HIT （精确或语义缓存命中）或 BYPASS ； X-AI-Cache-Age ，表示缓存条目的存在时长（秒），在任意缓存命中时输出； X-AI-Cache-Similarity ，表示请求提示词与命中条目之间的余弦相似度（0–1），仅在语义缓存命中时输出。",
+        "fail_mode": "当请求不是该插件可缓存的 AI 请求时的处理行为（例如未经过 ai-proxy 或 ai-proxy-multi 的请求）。 skip ：放行请求且不缓存； warn ：放行不缓存并记录 warning 日志； error ：拒绝请求。",
+        "bypass_on": "当任一规则匹配时，完全跳过缓存（不查询、不回写）的规则列表。",
+        "bypass_on[].header": "要匹配的请求头名称。",
+        "bypass_on[].equals": "当该请求头的值与此字符串完全相等时，绕过缓存。",
+        "policy": "存储后端。本次发布仅支持单节点 redis 。",
+        "layers": "要启用的缓存层。 exact 执行精确指纹匹配（L1），始终处于激活状态，数组中必须包含 \"exact\" ； semantic 启用向量相似度匹配（L2），仅在 L1 未命中时查询。至少需要一个值，且不可重复。",
+        "redis_host": "Redis 节点的地址。",
+        "redis_port": "Redis 节点的端口。",
+        "redis_username": "使用 Redis ACL 时的用户名。如果使用传统的 requirepass 认证方式，则仅配置 redis_password 。",
+        "redis_password": "Redis 节点的密码。在存入 etcd 之前使用 AES 加密。",
+        "redis_database": "Redis 中使用的数据库编号。",
+        "redis_timeout": "Redis 超时时间，单位为毫秒。",
+        "redis_ssl": "如果为 true，则使用 SSL 连接 Redis。",
+        "redis_ssl_verify": "如果为 true，则校验 Redis 服务器的 SSL 证书。",
+        "redis_server_name": "当 redis_ssl 为 true 时使用的 TLS SNI。默认使用 redis_host 。当 redis_ssl_verify 为 true 时，证书还必须与该名称匹配，因此当 redis_host 是证书未覆盖的别名时请设置此项。",
+        "redis_keepalive_timeout": "Redis 连接池的保活超时时间，单位为毫秒。",
+        "redis_keepalive_pool": "Redis 保活连接池中的最大连接数。",
+        "semantic.similarity_threshold": "将检索向量视为匹配所需的最小余弦相似度（即 1 − 距离）。低于该阈值的请求将透传至上游。",
+        "semantic.top_k": "从向量索引中检索的最近邻候选数量。只有得分最高的结果会与 similarity_threshold 进行比较。",
+        "semantic.distance_metric": "向量距离度量方式。目前仅支持 cosine （余弦距离）。",
+        "semantic.ttl": "语义缓存（L2）条目的存活时间（TTL），单位为秒。",
+        "semantic.match.message_countback": "纳入向量化输入的末尾 user 角色消息数量。",
+        "semantic.match.ignore_system_prompts": "如果为 true，则 system 角色消息不纳入向量化输入。",
+        "semantic.match.ignore_assistant_prompts": "如果为 true，则 assistant 角色消息不纳入向量化输入。",
+        "semantic.match.ignore_tool_prompts": "如果为 true，则 tool 角色消息不纳入向量化输入。",
+        "semantic.embedding": "向量化服务配置。 openai 与 azure_openai 二选一，必须且只能配置其中一个。",
+        "semantic.embedding.openai.endpoint": "OpenAI 兼容的向量化 API 端点 URL。省略时默认使用 OpenAI 公共 API。",
+        "semantic.embedding.openai.model": "向量化模型名称（例如 text-embedding-3-small ）。",
+        "semantic.embedding.openai.api_key": "OpenAI API 密钥。存入 etcd 时使用 AES 加密。",
+        "semantic.embedding.openai.dimensions": "覆盖向量输出维度（仅对支持该参数的模型有效）。",
+        "semantic.embedding.openai.ssl_verify": "如果为 true，验证向量化服务的证书。",
+        "semantic.embedding.openai.timeout": "向量化服务的请求超时时间（毫秒）。",
+        "semantic.embedding.azure_openai.endpoint": "Azure OpenAI 部署端点 URL。",
+        "semantic.embedding.azure_openai.api_key": "Azure OpenAI API 密钥。存入 etcd 时使用 AES 加密。",
+        "semantic.embedding.azure_openai.dimensions": "覆盖向量输出维度。",
+        "semantic.embedding.azure_openai.ssl_verify": "如果为 true，验证向量化服务的证书。",
+        "semantic.embedding.azure_openai.timeout": "向量化服务的请求超时时间（毫秒）。",
+        "semantic.vector_search": "向量索引配置。",
+        "semantic.vector_search.redis.index": "作为向量存储使用的 RediSearch 索引名称。"
+      }
+    },
+    "examples": [
+      {
+        "title": "缓存 LLM 响应",
+        "anchor": "缓存-llm-响应"
+      },
+      {
+        "title": "绕过缓存",
+        "anchor": "绕过缓存"
+      },
+      {
+        "title": "使用语义匹配缓存 LLM 响应",
+        "anchor": "使用语义匹配缓存-llm-响应"
+      }
+    ]
+  },
+  "ai-lakera-guard": {
+    "overview": [
+      "ai-lakera-guard 插件集成了 Lakera Guard API（v2） ，在网关层对 LLM 流量进行基于机器学习的安全扫描。它会检查请求提示词中的提示词注入、越狱、PII 泄露、内容策略违规以及恶意或未知链接，然后根据 Lakera 的判定结果进行 拦截 或 告警 ，从而使各个后端 LLM 服务无需各自实现安全防护。",
+      "运行哪些检测器以及使用何种阈值，完全由通过 project_id 选择的 Lakera 项目策略 控制。网关侧没有检测器列表；Lakera 每次调用返回单一的判定结果。"
+    ],
+    "fields": {
+      "route": {
+        "api_key": "Lakera Guard API 密钥，以 Authorization: Bearer 形式发送。该值在存储到 etcd 之前会使用 AES 加密，并支持 密钥引用 （ $secret:// ）和环境变量（ $env:// ）。",
+        "lakera_endpoint": "Lakera Guard v2 端点。可针对区域或自托管实例进行覆盖。",
+        "project_id": "要应用其策略（检测器和阈值）的 Lakera 项目。如果未设置，则使用账号的默认策略。",
+        "direction": "要扫描的流量。 input 扫描请求提示词； output 扫描 LLM 响应； both 先扫描请求，仅当请求通过后再扫描响应。参见 扫描方向 。",
+        "action": "如何处理被标记的判定结果。 block 拒绝请求； alert 是仅记录日志的影子模式，放行被标记的请求。该选项仅控制被标记的判定结果——即使在 alert 模式下，Lakera API 的错误/超时仍由 fail_open 控制。",
+        "fail_open": "当无法连接 Lakera（超时、连接错误、非 2xx、解码失败）时的处理行为。 false （失败时拒绝，fail-closed）拦截请求； true （失败时放行，fail-open）放行请求。成功返回 flagged: false 时始终放行。",
+        "fail_mode": "当请求不是该插件可识别和检查的 AI 请求时的处理行为（例如 Consumer 级别绑定时的普通 HTTP 流量，或未经过 ai-proxy 的请求）。 skip ：放行请求且不做检查； warn ：放行并记录 warning 日志； error ：拒绝请求。与 fail_open 不同，后者用于处理 Lakera API 调用失败的情况。",
+        "timeout": "Lakera 请求超时时间（毫秒）。",
+        "ssl_verify": "如果为 true ，则验证 Lakera 端点的 TLS 证书。",
+        "reveal_failure_categories": "如果为 true ，将匹配到的 Lakera detector_type （及其置信度结果）追加到返回给客户端的拒绝消息中。无论该设置如何，插件始终会向 Lakera 请求完整的每个检测器的 breakdown 并写入网关日志；此标志仅控制面向客户端的暴露。",
+        "deny_code": "请求被拦截时返回的 HTTP 状态码。默认为 200 ，使响应体——一个携带 request_failure_message 的、与提供商兼容的聊天补全（或 SSE）——在客户端 SDK 中被解析为正常的拒绝消息（与 Lakera Guard 自身返回 200 并附带判定结果的方式一致）。如果你希望拦截以 HTTP 错误的形式呈现，可设置为 4xx（例如 403 ）。",
+        "request_failure_message": "请求被拦截时返回的拒绝文本（作为与提供商兼容的响应中的 assistant 消息）。",
+        "response_failure_message": "LLM 响应被拦截时（ direction 为 output 或 both ）返回的拒绝文本（作为与提供商兼容的响应中的 assistant 消息）。"
+      }
+    },
+    "examples": [
+      {
+        "title": "拦截恶意请求",
+        "anchor": "拦截恶意请求"
+      },
+      {
+        "title": "同时扫描响应与请求",
+        "anchor": "同时扫描响应与请求"
+      },
+      {
+        "title": "先以影子模式上线",
+        "anchor": "先以影子模式上线"
+      },
+      {
+        "title": "显示匹配的类别",
+        "anchor": "显示匹配的类别"
+      }
+    ]
+  },
+  "data-mask": {
+    "overview": [
+      "data-mask 插件可在请求数据（查询参数、请求头、请求体）写入访问日志或日志插件（如 file-logger 、 http-logger ）之前，对敏感字段进行掩码或脱敏处理。",
+      "该插件适用于防止凭证、令牌、支付卡号及其他敏感信息被写入日志的场景。"
+    ],
+    "fields": {
+      "route": {
+        "request": "需应用于请求数据的掩码规则列表。",
+        "max_body_size": "处理请求体时允许的最大字节数。超过此大小的请求体将跳过请求体掩码处理。",
+        "max_req_post_args": "解析 urlencoded 请求体时允许的最大表单字段数量。",
+        "type": "要掩码的请求数据类型。可选值： query 、 header 、 body 。",
+        "name": "要掩码的字段名称。对于 query 和 header 类型，填写参数名或请求头名；对于 body 类型且 body_format 为 json 时，填写 JSONPath 表达式。",
+        "action": "掩码动作。可选值： remove 、 replace 、 regex 。",
+        "body_format": "请求体格式。可选值： json 、 urlencoded 。",
+        "regex": "用于匹配字段值的正则表达式。可以在 value 中通过 $1 、 $2 等方式引用捕获组。",
+        "value": "替换值。当与 action: regex 配合使用时，可通过 $1 、 $2 等引用正则捕获组。"
+      }
+    },
+    "examples": [
+      {
+        "title": "掩码查询参数",
+        "anchor": "掩码查询参数"
+      },
+      {
+        "title": "掩码请求头",
+        "anchor": "掩码请求头"
+      },
+      {
+        "title": "使用 JSONPath 掩码 JSON 请求体字段",
+        "anchor": "使用-jsonpath-掩码-json-请求体字段"
+      }
+    ]
+  },
+  "dingtalk-auth": {
+    "overview": [
+      "The dingtalk-auth Plugin integrates DingTalk OAuth 2.0 authentication into APISIX routes. It validates a DingTalk authorization code, exchanges it for an access token, and retrieves user information from the DingTalk open platform. Verified user information is cached in a secure cookie session so that subsequent requests are not interrupted."
+    ],
+    "fields": {
+      "route": {
+        "app_key": "DingTalk application App Key (client ID).",
+        "app_secret": "DingTalk application App Secret (client secret). This field is stored encrypted.",
+        "secret": "Key used to sign and encrypt the cookie session (8–32 characters). This field is stored encrypted.",
+        "redirect_uri": "URI to redirect the user to when no valid authorization code or session is present.",
+        "code_header": "HTTP request header name from which to read the DingTalk authorization code.",
+        "code_query": "Query parameter name from which to read the DingTalk authorization code.",
+        "access_token_url": "DingTalk endpoint used to obtain an access token.",
+        "userinfo_url": "DingTalk endpoint used to retrieve user information.",
+        "set_userinfo_header": "When true , the verified user information is Base64-encoded and forwarded to the upstream in the X-Userinfo header.",
+        "timeout": "Timeout in milliseconds for HTTP calls to DingTalk APIs.",
+        "ssl_verify": "Whether to verify the SSL certificate when calling DingTalk APIs.",
+        "cookie_expires_in": "Cookie session validity period in seconds.",
+        "secret_fallbacks": "List of fallback secrets used during key rotation (each 8–32 characters)."
+      }
+    },
+    "examples": [
+      {
+        "title": "Custom code extraction",
+        "anchor": "custom-code-extraction"
+      },
+      {
+        "title": "Key rotation",
+        "anchor": "key-rotation"
+      }
+    ]
+  },
+  "feishu-auth": {
+    "overview": [
+      "feishu-auth 插件使用 飞书（Lark）OAuth 2.0 授权流程对请求进行认证。未认证的用户将被重定向到飞书登录页面，登录成功后，飞书用户信息将存储在加密的 session Cookie 中，并可通过 X-Userinfo 请求头转发给上游服务。"
+    ],
+    "fields": {
+      "route": {
+        "app_id": "飞书应用的 App ID。",
+        "app_secret": "飞书应用的 App Secret。",
+        "secret": "用于签名 session Cookie 的密钥（8-32 个字符），重启后需保持不变。",
+        "auth_redirect_uri": "在飞书应用中注册的 OAuth 重定向 URI。",
+        "redirect_uri": "当请求中不含授权码时，将用户重定向到此 URI 以发起 OAuth 授权流程。",
+        "code_header": "从 HTTP 请求头中提取飞书授权码所使用的请求头名称。",
+        "code_query": "从 URL 查询参数中提取飞书授权码所使用的参数名称。",
+        "access_token_url": "使用授权码换取 access token 的接口地址。",
+        "userinfo_url": "使用 access token 获取用户信息的接口地址。",
+        "set_userinfo_header": "开启后，插件将飞书用户信息以 Base64 编码的 JSON 格式设置到 X-Userinfo 请求头中。",
+        "cookie_expires_in": "session Cookie 的有效时长（秒）。",
+        "secret_fallbacks": "密钥轮换时使用的备用密钥列表。",
+        "timeout": "请求飞书接口的超时时间（毫秒）。",
+        "ssl_verify": "开启后，连接飞书接口时会验证 SSL 证书。"
+      }
+    },
+    "examples": []
+  },
+  "graphql-limit-count": {
+    "overview": [
+      "graphql-limit-count 插件使用固定窗口算法对 GraphQL 请求进行速率限制。与每个请求消耗固定计数 1 的 limit-count 不同，本插件以 GraphQL 查询 AST 的深度 作为每次请求的消耗代价，对嵌套层级更深、处理代价更高的查询施加更严格的限制。",
+      "仅支持 POST 方法。插件支持两种内容类型："
+    ],
+    "fields": {
+      "route": {
+        "count": "时间窗口内允许的最大累计查询 AST 深度。当未配置 rules 时必填。",
+        "time_window": "限流时间窗口（秒）。当未配置 rules 时必填。",
+        "key_type": "key 的类型。 var 将 key 解释为 NGINX 变量； var_combination 将多个变量组合； constant 将 key 作为固定值。",
+        "key": "用于计数的 key。",
+        "rejected_code": "请求超出配额时返回的 HTTP 状态码。",
+        "rejected_msg": "请求被拒绝时返回的响应体。",
+        "policy": "限流计数器的存储策略。 local 使用当前 APISIX 节点内存； redis 和 redis-cluster 在多个实例间共享计数器。",
+        "allow_degradation": "为 true 时，插件或依赖不可用时 APISIX 仍继续处理请求。",
+        "show_limit_quota_header": "为 true 时，在响应中包含 X-RateLimit-Limit 和 X-RateLimit-Remaining 响应头。",
+        "group": "Group ID，用于在多个路由之间共享同一个限流计数器。",
+        "redis_host": "Redis 节点地址。 policy 为 redis 时必填。",
+        "redis_port": "Redis 节点端口。 policy 为 redis 时使用。",
+        "redis_username": "Redis ACL 认证用户名。 policy 为 redis 时使用。",
+        "redis_password": "Redis 节点密码。 policy 为 redis 或 redis-cluster 时使用。",
+        "redis_ssl": "为 true 时使用 SSL 连接 Redis。 policy 为 redis 时使用。",
+        "redis_ssl_verify": "为 true 时验证 Redis 服务端 SSL 证书。 policy 为 redis 时使用。",
+        "redis_server_name": "当 policy 为 redis 且 redis_ssl 为 true 时使用的 TLS SNI。默认使用 redis_host 。当 redis_ssl_verify 为 true 时，证书还必须与该名称匹配，因此当 redis_host 是证书未覆盖的别名时请设置此项。",
+        "redis_database": "Redis 数据库编号。 policy 为 redis 时使用。",
+        "redis_timeout": "Redis 超时时间（毫秒）。 policy 为 redis 或 redis-cluster 时使用。",
+        "redis_cluster_nodes": "Redis 集群节点地址列表。 policy 为 redis-cluster 时必填。",
+        "redis_cluster_name": "Redis 集群名称。 policy 为 redis-cluster 时必填。",
+        "redis_cluster_ssl": "为 true 时使用 SSL 连接 Redis 集群。 policy 为 redis-cluster 时使用。",
+        "redis_cluster_ssl_verify": "为 true 时验证 Redis 集群服务端 SSL 证书。 policy 为 redis-cluster 时使用。"
+      }
+    },
+    "examples": [
+      {
+        "title": "按客户端 IP 对查询深度限流",
+        "anchor": "按客户端-ip-对查询深度限流"
+      },
+      {
+        "title": "使用 Redis 在多个 APISIX 节点间共享配额",
+        "anchor": "使用-redis-在多个-apisix-节点间共享配额"
+      }
+    ]
+  },
+  "graphql-proxy-cache": {
+    "overview": [
+      "graphql-proxy-cache 插件为 GraphQL 查询响应提供缓存能力，支持磁盘和内存两种缓存策略，适用于 GET 和 POST 请求。",
+      "缓存键由插件配置版本、路由/服务/Host 标识符以及 GraphQL 请求体共同生成："
+    ],
+    "fields": {
+      "route": {
+        "cache_strategy": "缓存策略。 disk 使用 NGINX 原生 proxy_cache 将响应缓存到磁盘； memory 使用共享内存字典缓存响应。",
+        "cache_zone": "使用的缓存区域，值必须与 静态配置 中定义的某个区域名称一致。使用磁盘策略时应指定磁盘缓存区域，使用内存策略时应指定内存缓存区域。",
+        "cache_ttl": "内存策略的缓存生存时间（TTL），单位为秒。对于磁盘策略，TTL 由上游响应的 Expires 或 Cache-Control 头控制；若两者均不存在，则使用 config.yaml 中配置的 cache_ttl 。",
+        "consumer_isolation": "为 true 时，按已认证身份对缓存进行分区。当请求解析为 APISIX 消费者（ ctx.consumer_name ）或携带 remote user（ ctx.var.remote_user ）时，身份会作为前缀加入有效缓存键，使每个消费者拥有独立的缓存命名空间。若希望不同消费者共享缓存，可设置为 false 。",
+        "cache_set_cookie": "为 true 时，缓存包含 Set-Cookie 响应头的响应。仅对内存策略有效——磁盘策略由 NGINX 原生处理，始终不缓存带 Set-Cookie 的响应。仅当上游的 Set-Cookie 与具体用户无关时才启用。"
+      }
+    },
+    "examples": [
+      {
+        "title": "缓存 GraphQL 查询",
+        "anchor": "缓存-graphql-查询"
+      },
+      {
+        "title": "对 Mutation 操作绕过缓存",
+        "anchor": "对-mutation-操作绕过缓存"
+      },
+      {
+        "title": "使用内存缓存",
+        "anchor": "使用内存缓存"
+      },
+      {
+        "title": "清除缓存",
+        "anchor": "清除缓存"
+      }
+    ]
+  },
+  "ldap-auth-advanced": {
+    "overview": [
+      "ldap-auth-advanced 插件可用于给路由或服务添加 LDAP 身份认证。与使用 Consumer 配置拼接 DN 后直接绑定的 ldap-auth 不同，该插件会先在目录中 搜索 用户，再以搜索到的条目进行绑定。在 consumer_required 设置为 false 时，无需在 APISIX 中逐个维护用户；使用默认值 true 时，认证通过的用户仍需通过 user_dn 匹配到对应的 Consumer。",
+      "插件在每个请求中依次执行以下操作："
+    ],
+    "fields": {
+      "consumer": {
+        "user_dn": "与该 Consumer 绑定的 LDAP 用户 DN，例如 cn=Jane Doe,ou=users,dc=example,dc=org 。该字段支持使用 APISIX Secret 资源保存在密钥管理服务中。"
+      },
+      "route": {
+        "ldap_uri": "LDAP 服务器地址，格式为 host 或 host:port 。省略端口时，启用 use_ldaps 使用 636 ，否则使用 389 。",
+        "base_dn": "搜索用户的子树 DN，例如 ou=users,dc=example,dc=org 。",
+        "attribute": "与请求中用户名匹配的用户属性，例如 uid 或 sAMAccountName 。",
+        "bind_dn": "搜索用户前用于绑定的 DN。未配置时使用匿名绑定进行搜索。",
+        "ldap_password": "bind_dn 对应的密码。配置 bind_dn 时必填。该密码在存入 etcd 前使用 AES 加密。",
+        "use_ldaps": "如果为 true，则使用 LDAPS 连接。与 use_starttls 互斥。",
+        "use_starttls": "如果为 true，则通过 StartTLS 升级明文连接。与 use_ldaps 互斥。",
+        "ssl_verify": "如果为 true，则校验 LDAP 服务器证书。此时需要在 config.yaml 中配置 ssl_trusted_certificate ，并确保 ldap_uri 中的主机名与服务器证书中的主机名一致。",
+        "timeout": "套接字超时时间，单位为毫秒。",
+        "keepalive": "如果为 true，则将连接放回连接池复用，而不是直接关闭。",
+        "keepalive_timeout": "连接池中连接的空闲超时时间，单位为毫秒。",
+        "keepalive_pool_size": "连接池中保持的最大连接数。",
+        "keepalive_pool_name": "连接池名称。当不同配置使用不同凭证时，可通过该字段将连接隔离到不同的连接池。",
+        "size_limit": "用户搜索返回条目数的上限。登录属性应当唯一，因此匹配到多个条目会被视为歧义并拒绝。",
+        "time_limit": "搜索的时间限制，单位为秒。 0 表示使用服务器默认值。",
+        "consumer_required": "如果为 true，当没有 Consumer 与认证用户匹配时，返回 401 拒绝请求。",
+        "header_type": "凭证请求头中期望的认证方案关键字。",
+        "realm": "认证失败返回 401 Unauthorized 时， WWW-Authenticate 响应头中的 realm 值。"
+      }
+    },
+    "examples": [
+      {
+        "title": "使用 LDAP 目录进行身份认证",
+        "anchor": "使用-ldap-目录进行身份认证"
+      },
+      {
+        "title": "将 LDAP 身份映射到 Consumer",
+        "anchor": "将-ldap-身份映射到-consumer"
+      },
+      {
+        "title": "通过 LDAPS 连接",
+        "anchor": "通过-ldaps-连接"
+      }
+    ]
+  },
+  "mcp-bridge": {
+    "overview": [
+      "The mcp-bridge Plugin bridges an HTTP client speaking the Model Context Protocol (MCP) over SSE to a stdio-based MCP server. APISIX spawns the configured command as a backend process and relays messages between the SSE connection and the process’s standard input and output.",
+      "WARNING"
+    ],
+    "fields": {
+      "route": {
+        "command": "Command used to launch the MCP server process, e.g. npx .",
+        "args": "Arguments passed to the command.",
+        "base_uri": "Base URI used to build the SSE and message endpoint paths."
+      }
+    },
+    "examples": []
+  },
+  "openapi-to-mcp": {
+    "overview": [
+      "openapi-to-mcp 插件无需修改已有的 HTTP API，即可将其提供给 Model Context Protocol （MCP）客户端（例如 LLM Agent）使用。插件会获取 API 的 OpenAPI 文档，为每个操作生成一个 MCP 工具，并由插件自身应答 MCP 协议。客户端调用工具时，插件向 API 发送对应的 HTTP 请求，并将响应作为工具结果返回。",
+      "MCP 服务运行在 APISIX 内部，不需要额外的进程或服务。"
+    ],
+    "fields": {
+      "route": {
+        "transport": "路由上提供的 MCP 传输方式。",
+        "openapi_url": "OpenAPI 文档的 URL。文档在首次请求时获取，生成的工具缓存一小时。返回内容必须是带 paths 对象的 OpenAPI 或 Swagger 文档，否则每次 MCP 请求都会返回错误。",
+        "base_url": "工具调用的 API 基础地址，每个操作的路径拼接在其后。支持 APISIX 变量 和 NGINX 变量 ，例如 http://${http_x_backend} 。",
+        "headers": "发往 API 的每个请求都会携带的请求头。值支持变量，例如 \"Authorization\": \"Bearer ${http_x_api_token}\" 。",
+        "flatten_parameters": "为 false 时，工具输入中的参数分别嵌套在 pathParameters 、 queryParameters 和 headerParameters 下；为 true 时，参数直接放在输入对象的顶层。"
+      }
+    },
+    "examples": [
+      {
+        "title": "通过 Streamable HTTP 提供 API",
+        "anchor": "通过-streamable-http-提供-api"
+      },
+      {
+        "title": "通过 SSE 提供 API",
+        "anchor": "通过-sse-提供-api"
+      },
+      {
+        "title": "将凭证透传给 API",
+        "anchor": "将凭证透传给-api"
+      }
+    ]
+  },
+  "proxy-buffering": {
+    "overview": [
+      "proxy-buffering 插件用于按路由控制 nginx 代理缓冲行为。禁用代理缓冲后，nginx 会将上游响应直接流式传输给客户端，而不会在内存或磁盘中积累完整响应体。该功能对以下场景至关重要：",
+      "该插件工作在 rewrite 阶段，优先级为 21991 ，早于鉴权插件执行，可以影响 APISIX 流水线中代理 location 的选择。"
+    ],
+    "fields": {
+      "route": {
+        "disable_proxy_buffering": "设置为 true 时，将为该路由禁用 proxy_buffering ，从而支持流式响应。"
+      }
+    },
+    "examples": []
+  },
+  "saml-auth": {
+    "overview": [
+      "saml-auth 插件为 API 路由提供 SAML 2.0 （安全断言标记语言）身份验证。该插件充当 SAML 服务提供商（SP），并与 Keycloak、Okta、Azure Active Directory 等外部身份提供商（IdP）集成，在允许访问上游资源之前对用户进行身份验证。",
+      "当请求到达受保护的路由时，插件会检查是否存在有效的 SAML 会话。若没有会话，则将用户重定向到 IdP 进行身份验证。用户在 IdP 完成认证后，IdP 会将签名的 SAML 断言以 POST 方式发送到 SP 的断言消费者服务（ACS）URL。插件验证断言后，为用户建立会话。"
+    ],
+    "fields": {
+      "route": {
+        "sp_issuer": "服务提供商（SP）实体 ID/颁发者 URI，必须与在 IdP 中注册的 SP 实体 ID 一致。",
+        "idp_uri": "身份提供商 SSO 端点 URL，SAML 认证请求将发送至此 URL。",
+        "idp_cert": "PEM 格式的 IdP X.509 证书，用于验证 SAML 断言上的签名。",
+        "login_callback_uri": "SP 断言消费者服务（ACS）的请求路径，例如 /login/callback 。插件在请求路径等于该值时处理 IdP 的登录响应。该字段是路径，对外可见的 ACS 绝对 URL 通过 sp_acs_url 配置。",
+        "logout_uri": "SP 单点注销（SLO）端点的请求路径，例如 /logout ，请求此路径将触发注销流程。",
+        "logout_callback_uri": "SP 的 SLO 回调请求路径，例如 /logout/callback ，IdP 将注销请求和注销响应发送至此路径，必须在 IdP 中注册。",
+        "logout_redirect_uri": "注销成功后重定向用户的 URL。",
+        "sp_cert": "PEM 格式的 SP X.509 证书，IdP 使用此证书验证 SP 签名的请求。",
+        "sp_private_key": "PEM 格式的 SP 私钥，用于对 SAML 请求进行签名，该字段在存储时加密。",
+        "auth_protocol_binding_method": "认证请求的 SAML 绑定方式。设置为 HTTP-POST 时，会话 Cookie 的 SameSite 属性将设置为 None ， Secure 设置为 true 。",
+        "secret": "用于会话密钥派生的密钥。所有 APISIX 节点必须配置相同的值，以确保会话可在多个 worker 进程之间及重启后正常读取。该字段在存储时加密。",
+        "secret_fallbacks": "密钥轮换时使用的历史密钥列表，允许使用旧密钥加密的会话继续有效，该字段在存储时加密。",
+        "idp_issuers": "登录响应中允许的颁发者列表，响应中的每个断言都必须属于其中之一。未设置时，接受 idp_cert 签名的任意颁发者。空数组不接受任何颁发者，所有登录都会被拒绝。参见 颁发者与受众 。",
+        "sp_acs_url": "对外可见的 SP ACS 绝对 URL，例如 https://sp.example.com/login/callback 。该值会在认证请求中发送给 IdP，登录响应的 Destination 和 Recipient 必须与之相等。未设置时，根据请求的协议、主机和 login_callback_uri 生成。参见 代理后的 ACS URL 。",
+        "sp_audiences": "SP 接受的受众列表。带有 AudienceRestriction 的断言必须指定其中之一。未设置时，仅接受 sp_issuer 。",
+        "clock_skew": "校验 NotBefore 和 NotOnOrAfter 时允许与 IdP 之间存在的时钟偏差，单位为秒。",
+        "replay_dict": "已声明的 lua_shared_dict 名称，用于记录已接受的断言，使同一断言无法在同一 APISIX 节点上登录两次。未设置时，不记录已接受的断言。参见 断言重放防护 。",
+        "replay_ttl": "对没有过期时间的断言，记录的时长，单位为秒。有过期时间的断言会记录到过期后再加 clock_skew ，最长一天，若 replay_ttl 大于一天则以其为上限。仅在设置 replay_dict 时生效。"
+      }
+    },
+    "examples": []
+  },
+  "websocket-proxy": {
+    "overview": [
+      "websocket-proxy 插件用于给 upstream.scheme 为 ws 或 wss 的路由配置高级参数。目前它控制的是 APISIX 在连接两侧各自能接受的单个 WebSocket 帧的最大尺寸。",
+      "默认情况下，APISIX 接受来自下游客户端或上游的单帧最大为 65535 字节，超过这个尺寸的单帧会导致连接被关闭。 enable_websocket 没有这个限制，因为它让 nginx 直接转发原始字节、不解析帧；但 scheme: ws / wss 会解析每一帧以便运行插件逻辑，底层库如果不特别设置就会对单帧尺寸设上限。这个插件就是给需要收发更大消息的路由（比如客户端用一个 WebSocket 消息上传一个文件）放开这个上限用的。"
+    ],
+    "fields": {
+      "route": {
+        "client_max_payload_len": "这个路由能接受的、来自下游客户端的单个 WebSocket 消息的最大字节数，同时也是它能从客户端转发到上游的单个消息的最大字节数。不设置时按默认值 65535 处理。",
+        "upstream_max_payload_len": "这个路由能接受的、来自上游的单个 WebSocket 消息的最大字节数，同时也是它能从上游转发到客户端的单个消息的最大字节数。不设置时按默认值 65535 处理。"
+      }
+    },
+    "examples": []
+  }
+}

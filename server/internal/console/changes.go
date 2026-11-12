@@ -55,7 +55,8 @@ func (s *Server) insertChange(ctx context.Context, tx *sql.Tx, c Change) error {
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO operations(id,change_id,draft_id,position,resource_type,resource_id,action,base_hash,payload_cipher) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, newID(), c.ID, op.DraftID, i, op.ResourceType, op.ResourceID, op.Action, op.BaseHash, blob)
+		c.Operations[i].ID = newID()
+		_, err = tx.ExecContext(ctx, `INSERT INTO operations(id,change_id,draft_id,position,resource_type,resource_id,action,base_hash,payload_cipher) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, c.Operations[i].ID, c.ID, op.DraftID, i, op.ResourceType, op.ResourceID, op.Action, op.BaseHash, blob)
 		if err != nil {
 			return err
 		}
@@ -199,7 +200,11 @@ func (s *Server) publishChange(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, "变更状态已经变化")
 		return
 	}
-	publisher := actor(r)
+	s.startPublication(c, cluster, g, actor(r), unlock)
+	reply(w, 202, Object{"id": c.ID, "status": "publishing"})
+}
+
+func (s *Server) startPublication(c Change, cluster Cluster, g Gateway, publisher string, unlock func()) {
 	s.workers.Add(1)
 	go func() {
 		defer s.workers.Done()
@@ -208,7 +213,6 @@ func (s *Server) publishChange(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		s.executeChange(ctx, c, cluster, g, publisher)
 	}()
-	reply(w, 202, Object{"id": c.ID, "status": "publishing"})
 }
 
 // A transport failure is not evidence that a write failed: verify the resource before deciding.

@@ -1,10 +1,16 @@
 # APISIX Dashboard Next
 
-面向 Apache APISIX 3.x 的独立配置控制台。运维人员可以在开发、预发和生产集群之间切换，把路由、上游和插件的修改保存为草稿，审查差异后发布，并按发布记录回退。Dashboard 通过 Admin API 管理配置，业务流量直接经过 APISIX，数据面无需安装采集插件。
+面向 Apache APISIX 3.x 的独立配置控制台。运维人员可以在开发、预发和生产集群之间切换，直接发布路由、上游、插件和其他网关配置，并按发布记录回退。Dashboard 通过 Admin API 管理配置，业务流量直接经过 APISIX，数据面无需安装采集插件。
 
-**V1.0.0** · 简体中文 / English · 浅色 / 深色主题 · React + TypeScript / Go / PostgreSQL
+**V1.0.1** · 简体中文 / English · 浅色 / 深色主题 · React + TypeScript / Go / PostgreSQL
+
+从 V1.0.0 升级后，可直接发布配置或交给发布人，在路由列表批量操作，按字段查找插件说明，并查看各集群的 Admin API 连通状态。服务编辑器支持搜索上游和配置主被动健康检查。[V1.0.1 完整版本说明与升级步骤](docs/releases/V1.0.1.md) · [GitHub Release](https://github.com/zjq-coder/apisix-dashborad-new/releases/tag/V1.0.1)
 
 配套演示网关为 APISIX 3.19.0，路由编辑另有 3.14.1 的验收记录。各集群的可用资源和插件字段以该版本返回的 Schema 为准。
+
+插件编辑器按当前集群的 Schema 展示可配置字段，提供中英文字段说明、配置项搜索、类型选择和官方示例。路由认证与消费者凭据各有独立表单。需要修改节点、SSL 或 Stream 配置的插件可在目录中查看设置位置。[逐插件实测、依赖和复测方式](docs/plugin-verification.md)
+
+配套 Docker 网关在 3.19.0 基础镜像上包含多 worker 健康检查修复。新接手服务的 worker 会沿用已知的节点摘除状态。已有本地开发环境执行 `docker compose --profile gateway up -d --build --no-deps apisix` 即可更新网关。[测试与部署范围](docs/operations-guide.md#双节点故障摘除与恢复实测)
 
 [部署方式](#部署方式) · [主要功能](#主要功能) · [界面截图](#界面截图) · [开发与测试](#开发与测试)
 
@@ -14,10 +20,10 @@
 
 需要 Docker Engine 或 Docker Desktop，以及 Docker Compose v2。Dashboard 镜像在构建时编译 Go 服务和前端，最终由同一容器提供网页与 API。仅在运行示例数据或前端开发脚本时需要主机安装 Node.js 24+。
 
-### 1. 获取 V1.0.0 并初始化
+### 1. 获取 V1.0.1 并初始化
 
 ~~~sh
-git clone --branch V1.0.0 https://github.com/zjq-coder/apisix-dashborad-new.git
+git clone --branch V1.0.1 https://github.com/zjq-coder/apisix-dashborad-new.git
 cd apisix-dashborad-new
 ~~~
 
@@ -63,7 +69,7 @@ node scripts/seed-sandbox.mjs
 
 ~~~sh
 node -e "const fs=require('node:fs'); const file='.local/staging.env'; fs.mkdirSync('.local',{recursive:true}); if(!fs.existsSync(file)) fs.writeFileSync(file,'APISIX_ADMIN_KEY='+require('node:crypto').randomBytes(32).toString('hex')+'\n',{flag:'wx',mode:0o600})"
-docker compose -f compose.staging.yaml up -d --wait
+docker compose -f compose.staging.yaml up -d --build --wait
 node scripts/seed-staging.mjs
 ~~~
 
@@ -80,28 +86,45 @@ node scripts/seed-staging.mjs
 
 ## 主要功能
 
+在「路由管理」的操作列可以发布或下线路由、继续配置和查看已有草稿。眼睛按钮打开当前网关的脱敏配置，「更多」提供复制和删除。选中多条路由后可以导出 OpenAPI（JSON / YAML）或确认后批量删除。「高级特性」提供共享插件模板、JSON 数据编辑器及 OpenAPI 导入入口。详见[路由列表操作与验收](docs/route-list-actions.md)。
+
 | 功能 | 在界面中可以做什么 |
 | --- | --- |
-| 多环境与权限 | 切换集群、检测连接、启用只读模式，按账号和集群分配草稿编辑、发布、回退及审计权限。 |
+| 多环境与权限 | 接入、编辑、切换和删除集群连接，按名称、地址或健康状态筛选，查看最近探测时间、耗时及错误原因。支持只读接入和按集群授权。 |
 | 路由与上游 | 通过表单或 JSON 设置路径、域名、方法和嵌套条件；配置请求改写、重定向、服务引用、节点权重、负载均衡、重试和健康检查。 |
+| 服务配置 | 在「扩展资源 → 服务」设置域名和服务级插件，按名称或 ID 搜索并绑定当前集群的上游，也可直接配置节点、连接池和健康检查。[服务配置指南](docs/operations-guide.md#配置服务并选择上游) |
 | 插件与共享配置 | 按官方分类浏览集群已启用的插件，按 Schema 编辑。一条路由可引用一份包含多个插件的 Plugin Config；界面逐项显示继承、路由覆盖与停用状态。 |
 | 消费者与凭据 | 维护消费者、消费者组与独立 Credential；在消费者页面配置 API Key、Basic、JWT 等凭据，在路由启用对应插件。已保存的敏感值脱敏显示，支持轮换。 |
-| 草稿、差异、发布与回退 | 保存草稿后比较逐字段或 JSON 差异；按集群组织变更，检查基线、Schema 和依赖，再按顺序发布并回读。回退会生成一份可审查的新变更。 |
+| 草稿、差异、发布与回退 | 编辑时可校验配置，比较字段或 JSON 差异。直接发布会检查基线、Schema 和引用并回读；支持按记录回退或选择暂存草稿。 |
 | 共享策略与扩展资源 | 管理全局规则、插件元数据、Service、Stream Route、Proto 和 Secret 管理器，查看资源依赖。TLS 证书支持查询和目标环境引用。 |
-| 迁移与配置诊断 | 连同依赖导出脱敏配置包，映射目标资源 ID、域名和节点，解决冲突后批量生成草稿。输入请求方法、域名、路径，可离线分析候选路由和配置引用。 |
+| 迁移与配置诊断 | 连同依赖导出脱敏配置包，映射目标资源 ID、域名和节点，解决冲突后一次发布到目标集群。输入请求方法、域名、路径，可离线分析候选路由和配置引用。 |
 | 操作审计 | 按集群查看配置操作与发布执行记录。管理端持有网关 Admin Key，浏览器使用 Dashboard 会话。 |
 
-**第一次发布**可以从演示环境的 `order-api` 开始：编辑路由描述并保存草稿，在差异页核对改动，创建变更、校验并发布。打开发布详情查看每项回读结果；若要撤销，点击「生成回退变更」，确认差异后发布。多资源变更逐项执行，遇到失败可在详情中查看已应用的项目。
+**第一次发布**可以从演示环境的 `order-api` 开始。修改路由说明后点击「保存并发布」，执行成功后回到列表。「发布记录」保留逐项差异和回读结果。「回退已应用配置」可以恢复之前的版本。批量发布遇到执行错误会停止后续操作，详情会列出已应用、失败和跳过的资源。
+
+- 同时具备编辑和发布权限，可直接发布。生产环境需要输入目标集群名称；删除、上下线和批量删除会提示影响范围。
+- 只有编辑权限的账号点击「提交变更」，发布人在「发布记录」中确认即可执行。只读账号和只读集群不能写入。
+- 路由、上游和消费者编辑器保留可选的「保存草稿」，用于跨资源分次编辑。直接发布不会新增草稿记录。
+
+### 集群连接健康
+
+后台约每分钟携带已保存的管理密钥读取一次每个集群的 Admin API 插件列表，单次超时 5 秒。关闭页面后探测继续。打开「集群连接」时，页面每 5 秒刷新已保存的结果。绿色「健康」表示 Dashboard 最近成功访问该管理地址。超过两分钟未收到新结果时显示「检测已过期」。需要检查路由与上游的读取权限时，可点卡片上的「检测连接」。这两种检测均只访问管理面。
+
+管理员可以用卡片右下角的删除按钮解除接入。确认后会停止后续探测，清除保存的管理密钥和集群授权。网关上的路由和上游继续运行，历史发布与操作审计保留。若有发布正在进行，需等发布结束再移除。
+
+[查看集群连接界面截图](docs/screenshots/cluster-connections.png)
 
 ## 界面截图
 
-以下截图取自本地运行的 V1.0.0 开发和预发演示环境。点击图片可查看原图。
+以下截图取自本地开发和预发演示环境。点击图片可查看原图。
 
 | 路由管理 · 已发布的路由、匹配规则与启停状态 | 路由编辑 · 分区表单与实时配置预览 |
 | --- | --- |
-| [![路由管理列表](docs/screenshots/routes.png)](docs/screenshots/routes.png) | [![订单路由编辑与 JSON 预览](docs/screenshots/route-editor.png)](docs/screenshots/route-editor.png) |
+| [![路由管理列表](docs/screenshots/route-actions.png)](docs/screenshots/route-actions.png) | [![订单路由编辑与 JSON 预览](docs/screenshots/route-editor.png)](docs/screenshots/route-editor.png) |
 | **插件目录 · 按类别浏览集群启用的插件** | **发布详情 · 查看目标环境、执行结果与回退入口** |
 | [![集群插件目录](docs/screenshots/plugins.png)](docs/screenshots/plugins.png) | [![预发环境的已发布变更](docs/screenshots/release.png)](docs/screenshots/release.png) |
+| **集群连接 · 管理地址及最近一次健康探测** | **插件配置 · 按字段查找说明并编辑参数** |
+| [![集群连接](docs/screenshots/cluster-connections.png)](docs/screenshots/cluster-connections.png) | [![插件配置表单](docs/screenshots/plugin-configuration.png)](docs/screenshots/plugin-configuration.png) |
 
 ## 开发与测试
 
@@ -116,6 +139,8 @@ npm run dev
 | --- | --- |
 | 前端单元测试、类型、构建、格式 | `npm run test:web`、`npm run typecheck`、`npm run build`、`npm run format:check` |
 | Go 后端 | 在 `server/` 运行 `go test -race ./...` 和 `go vet ./...` |
+| 集群连接 | 初始化本地演示网关后运行 `node scripts/test-cluster-connections.mjs`，通过临时只读转发节点验证断连、恢复、权限和删除后停探。浏览器回归运行 `npm run test:e2e -- cluster-connections.spec.ts`。 |
+| 直接发布与回退 | [隔离 Docker 集成测试](docs/route-list-actions.md#直接发布的集成测试)覆盖全部 12 类可写资源，包含 HTTP 和 Stream 数据面验证。 |
 | 路由与真实代理 | 启动并初始化演示网关后运行 `npm run test:integration`、`npm run test:routes` |
 | 消费者与插件 | `npm run test:consumers`、`npm run test:consumer-plugins`。后者还会使用 Docker 启动独立的 LDAP 和 Wolf 协议测试服务。 |
 | 双环境、权限与浏览器 | 启动并初始化两个演示环境，依次执行 `node scripts/test-operations.mjs`、`node scripts/test-access.mjs`、`npm run test:e2e`。Playwright 默认使用 Edge，可通过 `PLAYWRIGHT_CHANNEL` 切换到已安装的 Chrome。 |

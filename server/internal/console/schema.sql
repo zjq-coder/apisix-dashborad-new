@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS clusters (
 CREATE TABLE IF NOT EXISTS sessions (
  token_hash text PRIMARY KEY, username text NOT NULL, expires_at timestamptz NOT NULL
 );
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS removed_at timestamptz;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS next_probe_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS probe_latency_ms bigint;
+ALTER TABLE clusters ADD COLUMN IF NOT EXISTS probe_error text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS clusters_due_probe ON clusters(next_probe_at) WHERE removed_at IS NULL;
 CREATE TABLE IF NOT EXISTS drafts (
  id text PRIMARY KEY, cluster_id text NOT NULL REFERENCES clusters(id), resource_type text NOT NULL,
  resource_id text NOT NULL, action text NOT NULL, title text NOT NULL, status text NOT NULL DEFAULT 'draft',

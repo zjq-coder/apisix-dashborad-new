@@ -280,6 +280,7 @@ func (g *HTTPGateway) PluginSchema(ctx context.Context, name string) (Object, er
 		out = Object(schema)
 	}
 	if err == nil {
+		normalizePluginSchema(out)
 		g.schemas.Store("route/"+name, clone(out))
 	}
 	return out, err

@@ -1,5 +1,6 @@
 import { translate, type Locale } from './i18n';
 import hub from './data/plugin-hub.json';
+import documentedExtensions from './data/plugin-doc-extensions.json';
 import { pluginDescriptions } from './data/pluginDescriptions';
 import { authenticationInfo } from './plugins';
 
@@ -43,7 +44,10 @@ export function pluginDetail(name: string) {
     name,
     category: info?.category || extensionCategory,
     icon: `/plugin-icons/${info?.icon || 'img/plugin/apisix.svg'}`,
-    docs: info ? `https://apisix.apache.org/zh/docs/apisix/plugins/${canonical}/` : undefined,
+    docs:
+      info || documentedExtensions.includes(canonical)
+        ? `https://apisix.apache.org/zh/docs/apisix/plugins/${canonical}/`
+        : undefined,
     description:
       pluginDescriptions[name] ||
       authenticationInfo[name]?.route ||

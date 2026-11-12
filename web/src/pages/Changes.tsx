@@ -1,3 +1,4 @@
+import { useConfigWrite } from '../useConfigWrite';
 import { messageText } from '../i18n/Message';
 import { LanguageSwitch, languageFooter } from '../components/LanguageSwitch';
 import { useFeedback } from '../i18n/feedback';
@@ -99,6 +100,24 @@ export function Drafts() {
       setParams(next, { replace: true });
     }
   };
+  const direct = useConfigWrite();
+  const applyDraft = useMutation({
+    mutationFn: (d: Draft) =>
+      direct.write({
+        resource_type: d.resource_type,
+        resource_id: d.resource_id,
+        action: d.action,
+        draft_id: d.id,
+        revision: d.revision,
+        base_hash: d.base_hash,
+        title: d.title,
+        value: d.after,
+      }),
+    onSuccess: (result) => {
+      if (result.status === 'succeeded') closePreview();
+    },
+    onError: (error) => message.error(feedback(error.message)),
+  });
   const validate = useMutation({
     mutationFn: (id: string) => post<Validation>(`/drafts/${id}/validate`),
     onSuccess: (result) => setValidation(result),
@@ -305,18 +324,28 @@ export function Drafts() {
           <Space>
             <LanguageSwitch compact />
             {preview?.status === 'draft' && (
-              <Button
-                type="primary"
-                disabled={cluster.read_only || !can('edit')}
-                onClick={() => {
-                  setSelection([preview.id]);
-                  closePreview();
-                  form.setFieldsValue({ title: preview.title });
-                  setCreating(true);
-                }}
-              >
-                {t('创建发布变更')}
-              </Button>
+              <>
+                <Button
+                  disabled={applyDraft.isPending || cluster.read_only || !can('edit')}
+                  onClick={() => {
+                    setSelection([preview.id]);
+                    closePreview();
+                    form.setFieldsValue({ title: preview.title });
+                    setCreating(true);
+                  }}
+                >
+                  {t('创建发布变更')}
+                </Button>
+                <Button
+                  type="primary"
+                  disabled={!direct.ready}
+                  loading={applyDraft.isPending}
+                  danger={preview.action === 'delete'}
+                  onClick={() => applyDraft.mutate(preview)}
+                >
+                  {preview.action === 'delete' && direct.publish ? t('确认删除') : direct.label}
+                </Button>
+              </>
             )}
           </Space>
         }
@@ -333,6 +362,7 @@ export function Drafts() {
                 <StatusTag status={preview.status} />
               </Space>
             </div>
+            {preview.status === 'draft' && direct.confirmationField}
             <DiffView before={preview.before} after={preview.after} diff={preview.diff} />
             <div className="drawer-section">
               <Space>
@@ -516,6 +546,7 @@ export function ChangeDetail() {
   const [activeOp, setActiveOp] = useState('');
   const [checks, setChecks] = useState<Validation>();
   const [confirm, setConfirm] = useState(false);
+  const [undoNow, setUndoNow] = useState(false);
   const [ack, setAck] = useState(false);
   const [targetName, setTargetName] = useState('');
   const query = useQuery({
@@ -539,8 +570,20 @@ export function ChangeDetail() {
     onError: (err) => message.error(feedback(err.message)),
   });
   const rollback = useMutation({
-    mutationFn: () => post<Change>(`/changesets/${changeId}/rollback`),
+    mutationFn: async (execute: boolean) => {
+      const c = await post<Change>(`/changesets/${changeId}/rollback`);
+      if (execute && c.status === 'pending') {
+        try {
+          await post(`/changesets/${c.id}/publish`);
+        } catch (error) {
+          message.error(feedback((error as Error).message));
+        }
+      }
+      return c;
+    },
     onSuccess: (c) => {
+      setConfirm(false);
+      setUndoNow(false);
       setChecks(undefined);
       setActiveOp('');
       go(`/changes/${c.id}`, c.cluster_id);
@@ -629,17 +672,37 @@ export function ChangeDetail() {
                 icon={<HistoryOutlined aria-hidden="true" />}
                 loading={rollback.isPending}
                 disabled={cluster?.read_only || !can('rollback', change.cluster_id)}
-                onClick={() => rollback.mutate()}
+                onClick={() => rollback.mutate(false)}
               >
                 {t('生成回退变更')}
+              </Button>
+            )}
+            {canRollback && (
+              <Button
+                icon={<HistoryOutlined aria-hidden="true" />}
+                danger
+                disabled={cluster?.read_only || !can('rollback', change.cluster_id)}
+                onClick={() => {
+                  setAck(false);
+                  setTargetName('');
+                  setUndoNow(true);
+                  setConfirm(true);
+                }}
+              >
+                {t('回退已应用配置')}
               </Button>
             )}
             {isPending && (
               <Button
                 type="primary"
                 icon={<RocketOutlined aria-hidden="true" />}
-                disabled={!checks?.ok || !canExecute}
+                disabled={
+                  !canExecute ||
+                  checks?.ok === false ||
+                  (operations.some((op) => op.draft_id) && !checks?.ok)
+                }
                 onClick={() => {
+                  setUndoNow(false);
                   setAck(false);
                   setTargetName('');
                   setConfirm(true);
@@ -681,7 +744,7 @@ export function ChangeDetail() {
         <Alert
           type="info"
           showIcon
-          title={t('这是一个新的回退变更，尚需校验和发布。')}
+          title={isPending ? t('这是一个新的回退变更，尚需校验和发布。') : t('回退记录')}
           description={t(
             '回退将恢复原发布前的配置。如果资源在原发布后已被修改，冲突检测会阻止覆盖。',
           )}
@@ -854,7 +917,11 @@ export function ChangeDetail() {
               modal.confirm({
                 footer: languageFooter,
                 title: messageText('取消这次变更？'),
-                content: messageText('关联草稿将标记为已丢弃，之后可基于网关最新配置重新编辑。'),
+                content: messageText(
+                  operations.some((op) => op.draft_id)
+                    ? '关联草稿将标记为已丢弃，之后可基于网关最新配置重新编辑。'
+                    : '取消后，此变更不会写入网关。',
+                ),
                 okText: messageText('取消变更'),
                 cancelText: messageText('保留'),
                 onOk: async () => {
@@ -870,19 +937,19 @@ export function ChangeDetail() {
               })
             }
           >
-            {t('取消变更并释放草稿')}
+            {operations.some((op) => op.draft_id) ? t('取消变更并释放草稿') : t('取消变更')}
           </Button>
         </div>
       )}
       <Modal
         footer={languageFooter}
-        title={t('确认发布到网关')}
+        title={undoNow ? t('确认回退到变更前的配置') : t('确认发布到网关')}
         open={confirm}
         onCancel={() => setConfirm(false)}
-        onOk={() => publish.mutate()}
-        okText={t('确认发布')}
+        onOk={() => (undoNow ? rollback.mutate(true) : publish.mutate())}
+        okText={undoNow ? t('确认回退') : t('确认发布')}
         cancelText={t('返回检查')}
-        confirmLoading={publish.isPending}
+        confirmLoading={publish.isPending || rollback.isPending}
         okButtonProps={{
           disabled: !ack || (cluster?.environment === 'production' && targetName !== cluster.name),
         }}
@@ -892,7 +959,11 @@ export function ChangeDetail() {
             showIcon
             type={cluster?.environment === 'production' ? 'warning' : 'info'}
             title={`${cluster?.name} · ${t(environmentNames[cluster?.environment || ''])}`}
-            description={t('将应用 {0} 项资源变更。配置写入后会影响实际请求。', operations.length)}
+            description={
+              undoNow
+                ? t('将恢复此变更中已应用的 {0} 项配置。', appliedCount)
+                : t('将应用 {0} 项资源变更。配置写入后会影响实际请求。', operations.length)
+            }
           />
           <p>{change.rollback_of ? feedback(change.reason) : change.reason}</p>
           {cluster?.environment === 'production' && (

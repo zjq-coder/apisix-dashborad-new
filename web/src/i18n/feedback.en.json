@@ -160,5 +160,20 @@
   "无效的引用标识 {0}": "Invalid reference ID {0}.",
   "请先删除消费者的独立凭据 {0}": "Delete the consumer credential {0} first.",
   "{0} 引用的{1} {2} 不存在": "{0} references a missing resource {2} ({1}).",
-  "请选择消费者": "Select a consumer."
+  "请选择消费者": "Select a consumer.",
+  "目标集群不一致": "The target clusters do not match",
+  "目标集群已变化，请刷新后重试": "The target cluster changed. Refresh and try again.",
+  "配置没有变化": "No configuration changes",
+  "请输入正确的生产集群名称": "Enter the production cluster name to confirm",
+  "无法读取插件敏感字段定义": "Could not read the sensitive field definitions for this plugin",
+  "检测到并发修改，请刷新配置后重试": "Concurrent modification detected. Reload the configuration and try again.",
+  "配置管理": "Configuration management",
+  "config.save": "Save configuration",
+  "config.batch-delete": "Delete routes in batch",
+  "集群正在发布，暂时不能删除连接": "A release is in progress. Remove the connection when it finishes.",
+  "Admin API 探测超时": "The Admin API probe timed out.",
+  "Admin API 认证失败（HTTP 401），请核对连接中保存的管理密钥": "Admin API authentication failed (HTTP 401). Check the management key saved for this connection.",
+  "Admin API 拒绝访问（HTTP 403），请核对来源地址和密钥权限": "Admin API access denied (HTTP 403). Check the source address and key permissions.",
+  "Admin API 插件列表格式无效": "The Admin API returned an invalid plugin list.",
+  "cluster.delete": "Remove cluster connection"
 }

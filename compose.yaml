@@ -39,7 +39,10 @@ services:
       ETCD_INITIAL_CLUSTER: sandbox=http://etcd:2380
     volumes: ["sandbox-etcd:/etcd-data"]
   apisix:
-    image: ${APISIX_IMAGE:-apache/apisix:3.19.0-debian}
+    build:
+      context: ./deploy/apisix/healthcheck
+      args:
+        APISIX_IMAGE: ${APISIX_IMAGE:-apache/apisix:3.19.0-debian}
     profiles: ["gateway"]
     environment:
       APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY:?Generate .env}

@@ -201,7 +201,7 @@ export function Overview() {
               <div className="workspace-empty">
                 <HistoryOutlined aria-hidden="true" />
                 <strong>{t('暂无发布记录')}</strong>
-                <p>{t('从草稿创建变更后，可在这里查看发布详情。')}</p>
+                <p>{t('发布后，可在这里查看执行结果和配置差异。')}</p>
               </div>
             )}
           </Panel>

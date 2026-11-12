@@ -87,7 +87,7 @@ export async function consumerAuthFixtures(runId) {
   const adminPassword = randomBytes(24).toString('hex');
   const directoryPassword = randomBytes(24).toString('hex');
   const wolfToken = randomBytes(24).toString('hex');
-  const baseDN = 'dc=example,dc=test';
+  const baseDN = `dc=${runId},dc=test`;
   const adminDN = `cn=admin,${baseDN}`;
   const created = [];
   async function cleanup() {
@@ -102,7 +102,7 @@ export async function consumerAuthFixtures(runId) {
       '--network',
       network,
       '-e',
-      'LDAP_DOMAIN=example.test',
+      `LDAP_DOMAIN=${runId}.test`,
       '-e',
       `LDAP_ADMIN_PASSWORD=${adminPassword}`,
       '-e',

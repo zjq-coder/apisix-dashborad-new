@@ -177,7 +177,7 @@ test('消费者插件弹窗内切换语言，保留未提交的用户名和密�
   await expect(dialog.getByLabel('username', { exact: true })).toHaveValue('local-i18n-user');
   await expect(dialog.getByLabel('password', { exact: true })).toHaveValue('i18n-test-value');
   await expect(dialog.getByLabel('password', { exact: true })).toHaveAttribute('type', 'password');
-  await dialog.getByRole('button', { name: 'Apply to consumer draft' }).click();
+  await dialog.getByRole('button', { name: 'Apply to consumer' }).click();
   await expect(dialog).toBeHidden();
   await expect(page.locator('.editor-aside .config-preview')).toContainText('credential hidden');
   await expect(page.locator('.editor-aside .config-preview')).not.toContainText('i18n-test-value');

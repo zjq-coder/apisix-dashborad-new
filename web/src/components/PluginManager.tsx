@@ -1,7 +1,7 @@
 import { messageText } from '../i18n/Message';
 import { languageFooter } from './LanguageSwitch';
 import { useFeedback } from '../i18n/feedback';
-import { useTranslate } from '../i18n';
+import { useLocale, useTranslate } from '../i18n';
 import { lazy, Suspense, useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import {
   App,
@@ -14,6 +14,7 @@ import {
   InputNumber,
   Modal,
   Segmented,
+  Select,
   Space,
   Spin,
   Switch,
@@ -23,6 +24,7 @@ import {
   BlockOutlined,
   DeleteOutlined,
   EditOutlined,
+  ExportOutlined,
   PlusOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -35,7 +37,15 @@ import { SchemaFields } from '../editor/SchemaFields';
 import { BufferContext, JsonField } from '../editor/Fields';
 import { patchField } from '../config';
 import { useSearchParams } from 'react-router-dom';
-import { matchesPlugin, pluginDetail, pluginTitle } from '../pluginHub';
+import {
+  matchesPlugin,
+  officialUrl,
+  pluginDetail,
+  pluginTitle,
+  hubGroups,
+  extensionCategory,
+} from '../pluginHub';
+import { pluginGuide, nonRouteSettings, pluginSetup } from '../editor/pluginGuide';
 import { PluginIcon } from './PluginIcon';
 import {
   authenticationInfo,
@@ -78,12 +88,10 @@ const routeDefaults: Record<string, JsonObject> = {
   },
   'ip-restriction': { whitelist: ['127.0.0.1'] },
   'request-id': { header_name: 'X-Request-Id', include_in_response: true },
-  'traffic-split': { rules: [] },
 };
 const fieldNames: Record<string, string> = {
   rate: '请求速率（次 / 秒）',
   burst: '突发容量',
-  key: '计数维度',
   key_type: '维度类型',
   rejected_code: '拒绝响应码',
   rejected_msg: '拒绝提示',
@@ -128,6 +136,7 @@ export function PluginManager({
 }) {
   const feedback = useFeedback();
   const t = useTranslate();
+  const locale = useLocale();
   const shared = !!resourceType;
   const consumer = scope === 'consumer';
   const [params] = useSearchParams();
@@ -137,8 +146,10 @@ export function PluginManager({
   const [validating, setValidating] = useState(false);
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
+  const [groupFilter, setGroupFilter] = useState('');
   const [category, setCategory] = useState('credentials');
   const [editing, setEditing] = useState('');
+  const [fieldSearch, setFieldSearch] = useState('');
   const [draft, setDraft] = useState<JsonObject>({});
   const [raw, setRaw] = useState('{}');
   const [mode, setMode] = useState('form');
@@ -167,6 +178,8 @@ export function PluginManager({
     enabled: !!editing && !!clusterId,
   });
   const definition = plugins.data?.find((item) => item.name === editing);
+  const detail = pluginDetail(editing);
+  const guide = pluginGuide(editing, locale);
   const isCredential = (name: string) =>
     plugins.data?.some((item) => item.name === name && item.consumer_source !== 'none');
   const descriptionOf = (name: string) =>
@@ -175,6 +188,9 @@ export function PluginManager({
     pluginDetail(name).description;
   const formSchema = useMemo(() => {
     const result = structuredClone(schema.data || {});
+    const helpScope =
+      consumer && definition?.consumer_source === 'dedicated' ? 'consumer' : 'route';
+    result['x-field-help'] = guide?.fields[helpScope];
     const retained: string[] = [];
     const visit = (item: any, path: string) => {
       if (item === KEEP_SECRET) retained.push(path);
@@ -206,13 +222,14 @@ export function PluginManager({
       ];
     }
     return result;
-  }, [schema.data, editing, consumer, draft, value, plugins.data]);
+  }, [schema.data, editing, consumer, draft, value, plugins.data, definition, guide, locale]);
   const recommended = useMemo(
     () =>
       (plugins.data || [])
         .filter(
           (item) =>
             item.scope !== 'global' &&
+            !nonRouteSettings[item.name] &&
             (!consumer ||
               (item.consumer_configurable &&
                 (resourceType !== 'credentials' || item.consumer_source !== 'none') &&
@@ -220,11 +237,12 @@ export function PluginManager({
         )
         .map((item) => item.name)
         .filter((name) => !value[name] && matchesPlugin(pluginDetail(name), search))
+        .filter((name) => consumer || !groupFilter || pluginDetail(name).category === groupFilter)
         .sort(
           (a, b) =>
             Number(pluginTitle(b) !== b) - Number(pluginTitle(a) !== a) || a.localeCompare(b),
         ),
-    [plugins.data, value, search, consumer, category, resourceType],
+    [plugins.data, value, search, consumer, category, groupFilter, resourceType],
   );
   const open = (name: string) => {
     const next = structuredClone(value[name] || (!consumer && routeDefaults[name]) || {});
@@ -233,6 +251,7 @@ export function PluginManager({
     setErrors([]);
     setFieldErrors({});
     setMode('form');
+    setFieldSearch('');
     setEditing(name);
     setAdding(false);
   };
@@ -289,10 +308,10 @@ export function PluginManager({
           <h3>{shared ? t('插件配置') : consumer ? t('认证方式与访问策略') : t('路由插件')}</h3>
           <p>
             {shared
-              ? t('插件设置随此资源的草稿发布。')
+              ? t('插件设置随当前资源一起发布。')
               : consumer
                 ? t('凭据与策略独立配置，支持同一消费者使用多种认证方式。')
-                : t('配置来自当前路由，保存后随路由草稿一起提交。')}
+                : t('编辑此路由的插件，保存路由时一起发布。')}
           </p>
         </div>
         <Button
@@ -359,7 +378,7 @@ export function PluginManager({
                 onClick={() =>
                   modal.confirm({
                     footer: languageFooter,
-                    title: messageText('从草稿中移除 {0}？', name),
+                    title: messageText('从当前配置中移除 {0}？', name),
                     okText: messageText('移除'),
                     cancelText: messageText('取消'),
                     onOk: () => {
@@ -400,13 +419,26 @@ export function PluginManager({
             ]}
           />
         )}
-        <Input
-          prefix={<SearchOutlined aria-hidden="true" />}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('搜索插件名称或用途')}
-          allowClear
-        />
+        <div className="plugin-picker-tools">
+          <Input
+            prefix={<SearchOutlined aria-hidden="true" />}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('搜索插件名称或用途')}
+            allowClear
+          />
+          {!consumer && (
+            <Select
+              aria-label={t('筛选插件分类')}
+              value={groupFilter}
+              onChange={setGroupFilter}
+              options={['', ...hubGroups.map((g) => g.name), extensionCategory].map((g) => ({
+                value: g,
+                label: t(g || '全部分类'),
+              }))}
+            />
+          )}
+        </div>
         {plugins.isLoading ? (
           <Spin />
         ) : plugins.isError ? (
@@ -443,12 +475,25 @@ export function PluginManager({
         onCancel={() => setEditing('')}
         onOk={save}
         confirmLoading={validating}
-        okText={shared ? t('应用到草稿') : consumer ? t('应用到消费者草稿') : t('应用到路由草稿')}
+        okText={shared ? t('应用到配置') : consumer ? t('应用到消费者') : t('应用到路由')}
         cancelText={t('取消')}
-        width={820}
+        width={920}
+        className="plugin-config-dialog"
         okButtonProps={{ disabled: readOnly || schema.isLoading || schema.isError }}
         destroyOnHidden
       >
+        <section className="plugin-config-overview">
+          <div>
+            <span className="plugin-config-category">{t(detail.category)}</span>
+            <p>{t(detail.description)}</p>
+            {pluginSetup[editing] && <p className="form-hint">{t(pluginSetup[editing])}</p>}
+          </div>
+          {detail.docs && (
+            <a href={officialUrl(detail.docs, locale)} target="_blank" rel="noreferrer">
+              {t('官方插件文档')} <ExportOutlined />
+            </a>
+          )}
+        </section>
         {(authenticationInfo[editing] ||
           (definition?.consumer_source !== undefined && definition.consumer_source !== 'none') ||
           consumerPolicyHints[editing]) && (
@@ -487,7 +532,7 @@ export function PluginManager({
                 )}
                 <p className="form-hint">
                   {consumer
-                    ? t('修改只写入草稿，发布后才生效。请在路由中启用对应认证插件。')
+                    ? t('保存消费者后，请在路由中启用对应认证插件。')
                     : schema.data?.properties?.anonymous_consumer
                       ? t(
                           '消费者管理在新标签页打开。匿名消费者会允许未认证请求通过，需要强制认证时请留空。',
@@ -499,7 +544,18 @@ export function PluginManager({
           />
         )}
         <div className="plugin-modal-tools">
-          <span className="muted">{t('应用前由当前网关校验参数')}</span>
+          {mode === 'form' && (
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              className="plugin-field-search"
+              aria-label={t('查找配置项')}
+              placeholder={t('查找配置项')}
+              value={fieldSearch}
+              disabled={Object.keys(fieldErrors).length > 0}
+              onChange={(event) => setFieldSearch(event.target.value)}
+            />
+          )}
           <Segmented
             value={mode}
             onChange={(v) => {
@@ -557,9 +613,12 @@ export function PluginManager({
                           anonymous_consumer: t('匿名消费者（可选）'),
                           realm: t('认证域'),
                         }
-                      : fieldNames
+                      : ['limit-req', 'limit-count', 'limit-conn'].includes(editing)
+                        ? { ...fieldNames, key: '计数维度' }
+                        : fieldNames
                 }
                 readOnly={readOnly}
+                filter={fieldSearch}
                 schema={formSchema}
                 value={draft}
                 onChange={(next) => {
@@ -619,6 +678,28 @@ export function PluginManager({
                               readOnly={readOnly}
                             />
                           </Form.Item>
+                          {Object.keys(formSchema.properties?._meta?.properties || {}).some(
+                            (key) => !['filter', 'priority'].includes(key),
+                          ) && (
+                            <SchemaFields
+                              prefix="_meta"
+                              root={formSchema}
+                              schema={{
+                                properties: Object.fromEntries(
+                                  Object.entries(formSchema.properties._meta.properties).filter(
+                                    ([key]) => !['filter', 'priority'].includes(key),
+                                  ),
+                                ),
+                              }}
+                              value={draft._meta || {}}
+                              readOnly={readOnly}
+                              onChange={(meta) => {
+                                const next = { ...draft, _meta: meta };
+                                setDraft(next);
+                                setRaw(pretty(next));
+                              }}
+                            />
+                          )}
                         </>
                       ),
                     },

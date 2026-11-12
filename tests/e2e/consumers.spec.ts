@@ -80,7 +80,7 @@ test('消费者界面创建密钥、脱敏、发布、保留、轮换和回退',
       .getByRole('dialog')
       .getByRole('button', { name: /API Key 认证/ })
       .click();
-    await page.getByRole('button', { name: '应用到消费者草稿' }).click();
+    await page.getByRole('button', { name: '应用到消费者' }).click();
     await expect(page.getByText('配置需要调整')).toBeVisible();
     await page.getByRole('button', { name: '生成 key', exact: true }).click();
     const input = page.getByLabel('key', { exact: true });
@@ -91,7 +91,7 @@ test('消费者界面创建密钥、脱敏、发布、保留、轮换和回退',
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.getByRole('button', { name: '复制 key', exact: true }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(key);
-    await page.getByRole('button', { name: '应用到消费者草稿' }).click();
+    await page.getByRole('button', { name: '应用到消费者' }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await page.getByLabel('资源说明', { exact: true }).fill('平台健康检查调用方');
     await page.screenshot({ path: '.local/screenshots/consumer-key-editor.png', fullPage: true });
@@ -110,7 +110,7 @@ test('消费者界面创建密钥、脱敏、发布、保留、轮换和回退',
     await expect(page.getByRole('button', { name: '复制 key', exact: true })).toBeDisabled();
     await input.fill('temporary-replacement');
     await input.fill('');
-    await page.getByRole('button', { name: '应用到消费者草稿' }).click();
+    await page.getByRole('button', { name: '应用到消费者' }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await page.getByLabel('资源说明', { exact: true }).fill('更新说明，保留已有密钥');
     await save(page, `${id} 保留`);
@@ -122,7 +122,7 @@ test('消费者界面创建密钥、脱敏、发布、保留、轮换和回退',
     await page.getByRole('button', { name: '生成 key', exact: true }).click();
     const replacement = await input.inputValue();
     expect(replacement).not.toBe(key);
-    await page.getByRole('button', { name: '应用到消费者草稿' }).click();
+    await page.getByRole('button', { name: '应用到消费者' }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await save(page, `${id} 轮换`);
     await traffic(`/${id}`, key, 200);

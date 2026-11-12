@@ -8,6 +8,7 @@ func (s *Server) validateConfig(w http.ResponseWriter, r *http.Request) {
 		ResourceType string `json:"resource_type"`
 		ResourceID   string `json:"resource_id"`
 		DraftID      string `json:"draft_id"`
+		IncludeDiff  bool   `json:"include_diff"`
 		Value        Object `json:"value"`
 	}
 	if !readJSON(w, r, &in) {
@@ -27,7 +28,8 @@ func (s *Server) validateConfig(w http.ResponseWriter, r *http.Request) {
 		dbError(w, err)
 		return
 	}
-	var base Object
+	var base, before Object
+	var paths []string
 	if in.DraftID != "" {
 		if !needDraft(w, r, s.Store.DB, in.DraftID, "view") {
 			return
@@ -41,9 +43,11 @@ func (s *Server) validateConfig(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "草稿不属于当前集群的目标资源")
 			return
 		}
-		base = draft.After
+		base, before = draft.After, draft.Before
+		paths = draft.SensitivePaths
 	} else if in.ResourceID != "" {
 		base, err = g.Get(r.Context(), in.ResourceType, in.ResourceID)
+		before = base
 		if err != nil {
 			fail(w, 502, err.Error())
 			return
@@ -75,5 +79,15 @@ func (s *Server) validateConfig(w http.ResponseWriter, r *http.Request) {
 		checks = append(checks, Check{Name: "资源引用", OK: err == nil, Message: message})
 	}
 	auditCheck(r, checksOK(checks))
-	reply(w, 200, Object{"ok": checksOK(checks), "checks": checks})
+	result := Object{"ok": checksOK(checks), "checks": checks}
+	if in.IncludeDiff && checksOK(checks) {
+		secretPaths, err := g.ResourceSecretPaths(r.Context(), in.ResourceType, in.ResourceID, before, value)
+		if err != nil {
+			fail(w, 502, "无法读取插件敏感字段定义")
+			return
+		}
+		protected := append(paths, secretPaths...)
+		result["preview"] = Object{"before": redact(before, protected), "after": redact(value, protected), "diff": differences(before, value, protected)}
+	}
+	reply(w, 200, result)
 }

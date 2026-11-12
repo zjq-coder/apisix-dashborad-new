@@ -128,8 +128,36 @@ export function activeSchema(schema: JsonObject, value: JsonObject): JsonObject 
     result.properties = { ...result.properties, ...part.properties };
     result.required = [...new Set([...result.required, ...(part.required || [])])];
   };
+  const applyConditional = (part: JsonObject) => {
+    if (!part.if) {
+      merge(part);
+      return;
+    }
+    const condition = part.if;
+    // Leave more complex predicates to the gateway validator and JSON editor.
+    if (Object.keys(condition).some((key) => !['properties', 'required'].includes(key))) return;
+    const fields = Object.entries(condition.properties || {}) as [string, JsonObject][];
+    if (
+      fields.some(([, field]) => Object.keys(field).some((key) => !['const', 'enum'].includes(key)))
+    )
+      return;
+    const matches =
+      (condition.required || []).every((key: string) => Object.hasOwn(value, key)) &&
+      fields.every(([key, field]) => {
+        const actual = value[key] ?? schema.properties?.[key]?.default;
+        return (
+          actual === undefined ||
+          ((!Object.hasOwn(field, 'const') || field.const === actual) &&
+            (!field.enum || field.enum.includes(actual)))
+        );
+      });
+    merge((matches ? part.then : part.else) || {});
+  };
+  if (schema.if) applyConditional(schema);
+  for (const part of schema.allOf || []) applyConditional(part);
   for (const [name, dependency] of Object.entries(schema.dependencies || {})) {
     const current = value[name] ?? schema.properties?.[name]?.default;
+    if (Array.isArray(dependency) && current !== undefined) merge({ required: dependency });
     if (
       current === undefined ||
       !dependency ||

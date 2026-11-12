@@ -157,7 +157,7 @@ func needCluster(w http.ResponseWriter, r *http.Request, q queryRower, id, perm 
 	}
 	if perm == "edit" || perm == "publish" || perm == "rollback" {
 		var ro bool
-		err := q.QueryRowContext(r.Context(), "SELECT read_only FROM clusters WHERE id=$1", id).Scan(&ro)
+		err := q.QueryRowContext(r.Context(), "SELECT read_only FROM clusters WHERE id=$1 AND removed_at IS NULL", id).Scan(&ro)
 		if err != nil {
 			dbError(w, err)
 			return false

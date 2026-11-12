@@ -1,3 +1,4 @@
+import { useConfigWrite } from '../useConfigWrite';
 import { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Form, Input, Select, Space, Table, Tag } from 'antd';
@@ -6,6 +7,7 @@ import { useConsole } from '../context';
 import { useTranslate } from '../i18n';
 import { NoCluster, PageTitle, Panel, RequestError } from '../components/Common';
 import { RefList, type Ref } from './Managed';
+import { RouteImportFields } from './RouteTools';
 import { kindNames, pretty, type Resource, type JsonObject, type Difference } from '../types';
 
 interface Bundle {
@@ -26,14 +28,20 @@ const actions: Record<string, string> = {
   conflict: '资源冲突',
 };
 const signature = (r: Ref) => r.kind + '/' + r.id;
-export function Transfer() {
+export function Transfer({ routeImport = false }: { routeImport?: boolean }) {
   const { clusterId } = useConsole();
-  return clusterId ? <TransferForm key={clusterId} /> : <NoCluster />;
+  return clusterId ? (
+    <TransferForm key={clusterId + routeImport} routeImport={routeImport} />
+  ) : (
+    <NoCluster />
+  );
 }
-function TransferForm() {
-  const { clusterId, clusters, cluster, can, go, refresh } = useConsole();
+function TransferForm({ routeImport }: { routeImport: boolean }) {
+  const { clusterId, clusters, cluster, go } = useConsole();
   const t = useTranslate();
-  const [target, setTarget] = useState(clusters.find((c) => c.id !== clusterId)?.id || clusterId);
+  const [target, setTarget] = useState(
+    (!routeImport && clusters.find((c) => c.id !== clusterId)?.id) || clusterId,
+  );
   const [kind, setKind] = useState('routes');
   const [roots, setRoots] = useState<string[]>([]);
   const [raw, setRaw] = useState('');
@@ -42,10 +50,13 @@ function TransferForm() {
   const [preview, setPreview] = useState<Preview>();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>();
-  const [saved, setSaved] = useState<string[]>([]);
+  const [saved, setSaved] = useState('');
+  const targetCluster = clusters.find((c) => c.id === target);
+  const direct = useConfigWrite(targetCluster);
   const file = useRef<HTMLInputElement>(null);
   const source = useQuery({
     queryKey: ['transfer-source', clusterId, kind],
+    enabled: !routeImport,
     queryFn: () => api<{ items: Resource[] }>('/clusters/' + clusterId + '/resources/' + kind),
   });
   const revision = useRef(0);
@@ -53,7 +64,7 @@ function TransferForm() {
     revision.current++;
     setPreview(undefined);
     setErr(undefined);
-    setSaved([]);
+    setSaved('');
   };
   function setBundle(b: string) {
     invalidate();
@@ -114,13 +125,17 @@ function TransferForm() {
       };
       const base = '/clusters/' + target + '/transfer/';
       if (stage) {
-        const out = await post<{ draft_ids: string[] }>(base + 'stage', {
-          ...body,
-          token: preview?.token,
-        });
-        setSaved(out.draft_ids);
-        setPreview(undefined);
-        refresh();
+        const out = await direct.write(
+          {
+            ...body,
+            token: preview?.token,
+          },
+          'transfer',
+        );
+        if (version === revision.current) {
+          if (out.status === 'succeeded') setSaved(out.id);
+          setPreview(undefined);
+        }
       } else {
         setPreview(undefined);
         const result = await post<Preview>(base + 'preview', body);
@@ -128,87 +143,94 @@ function TransferForm() {
       }
     });
   }
-  const targetCluster = clusters.find((c) => c.id === target);
   return (
     <>
       <PageTitle
-        title={t('环境迁移')}
-        description={t('选择源资源和依赖，在目标环境预览差异，生成可审查的草稿。')}
+        title={routeImport ? t('导入 OpenAPI') : t('环境迁移')}
+        description={
+          routeImport
+            ? t('解析文件并预览差异，一次发布选中的路由。')
+            : t('选择源资源及依赖，核对差异后发布到目标环境。')
+        }
       />
       <div className="ops-stack">
-        <Panel title={t('源配置包')}>
+        <Panel title={routeImport ? t('路由文件') : t('源配置包')}>
           <div className="ops-body">
-            <Form layout="vertical">
-              <Form.Item label={t('源环境')}>
-                <Tag>{cluster?.name}</Tag>
-              </Form.Item>
-              <div className="ops-grid">
-                <Select
-                  aria-label={t('资源类型')}
-                  value={kind}
-                  onChange={setKind}
-                  options={portable.map((v) => ({ value: v, label: t(kindNames[v]) }))}
-                />
-                <Select
-                  mode="multiple"
-                  aria-label={t('选择源资源')}
-                  placeholder={t('选择源资源')}
-                  value={roots}
-                  onChange={(v) => {
-                    setRoots(v);
-                    setBundle('');
-                  }}
-                  options={Array.from(
-                    new Set([
-                      ...roots,
-                      ...(source.data?.items || []).map((v) => kind + '/' + v.id),
-                    ]),
-                  ).map((value) => ({ value }))}
-                />
-              </div>
-              {source.error && <RequestError error={source.error} />}
-              <Space wrap>
-                <Button disabled={!roots.length || busy} onClick={loadSource}>
-                  {t('读取资源及依赖')}
-                </Button>
-                <Button disabled={busy} onClick={() => file.current?.click()}>
-                  {t('导入 JSON 文件')}
-                </Button>
-                <Button disabled={!bundle || busy} onClick={download}>
-                  {t('导出配置包')}
-                </Button>
-              </Space>
-              <input
-                hidden
-                type="file"
-                accept=".json,application/json"
-                ref={file}
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = '';
-                  if (f)
-                    run(async () => {
-                      if (f.size > 2 * 1024 * 1024) throw Error(t('文件超过 2 MiB'));
-                      setBundle(await f.text());
-                    });
-                }}
-              />
-              {raw && (
-                <Form.Item label={t('配置包内容')}>
-                  <Input.TextArea
-                    className="ops-code"
-                    aria-label={t('配置包内容')}
-                    value={raw}
-                    rows={6}
-                    onChange={(e) => {
-                      invalidate();
-                      setRaw(e.target.value);
-                    }}
-                  />
-                  {!bundle && <Alert type="error" title={t('配置包格式无效')} />}
+            {routeImport ? (
+              <RouteImportFields setBundle={setBundle} busy={busy} />
+            ) : (
+              <Form layout="vertical">
+                <Form.Item label={t('源环境')}>
+                  <Tag>{cluster?.name}</Tag>
                 </Form.Item>
-              )}
-            </Form>
+                <div className="ops-grid">
+                  <Select
+                    aria-label={t('资源类型')}
+                    value={kind}
+                    onChange={setKind}
+                    options={portable.map((v) => ({ value: v, label: t(kindNames[v]) }))}
+                  />
+                  <Select
+                    mode="multiple"
+                    aria-label={t('选择源资源')}
+                    placeholder={t('选择源资源')}
+                    value={roots}
+                    onChange={(v) => {
+                      setRoots(v);
+                      setBundle('');
+                    }}
+                    options={Array.from(
+                      new Set([
+                        ...roots,
+                        ...(source.data?.items || []).map((v) => kind + '/' + v.id),
+                      ]),
+                    ).map((value) => ({ value }))}
+                  />
+                </div>
+                {source.error && <RequestError error={source.error} />}
+                <Space wrap>
+                  <Button disabled={!roots.length || busy} onClick={loadSource}>
+                    {t('读取资源及依赖')}
+                  </Button>
+                  <Button disabled={busy} onClick={() => file.current?.click()}>
+                    {t('导入 JSON 文件')}
+                  </Button>
+                  <Button disabled={!bundle || busy} onClick={download}>
+                    {t('导出配置包')}
+                  </Button>
+                </Space>
+                <input
+                  hidden
+                  type="file"
+                  accept=".json,application/json"
+                  ref={file}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (f)
+                      run(async () => {
+                        if (f.size > 2 * 1024 * 1024) throw Error(t('文件超过 2 MiB'));
+                        setBundle(await f.text());
+                      });
+                  }}
+                />
+                {raw && (
+                  <Form.Item label={t('配置包内容')}>
+                    <Input.TextArea
+                      className="ops-code"
+                      aria-label={t('配置包内容')}
+                      value={raw}
+                      rows={6}
+                      onChange={(e) => {
+                        invalidate();
+                        setRaw(e.target.value);
+                      }}
+                    />
+                    {!bundle && <Alert type="error" title={t('配置包格式无效')} />}
+                  </Form.Item>
+                )}
+              </Form>
+            )}
           </div>
         </Panel>
         {bundle && (
@@ -218,6 +240,7 @@ function TransferForm() {
                 <Form.Item label={t('目标环境')}>
                   <Select
                     aria-label={t('目标环境')}
+                    disabled={busy}
                     value={target}
                     onChange={(v) => {
                       invalidate();
@@ -333,13 +356,20 @@ function TransferForm() {
                   { title: t('资源依赖'), render: (_, r) => <RefList items={r.dependencies} /> },
                 ]}
               />
+              {direct.confirmationField}
               <Button
                 type="primary"
-                disabled={!preview.ready || !can('edit', target) || targetCluster?.read_only}
+                disabled={
+                  !preview.ready ||
+                  !preview.rows.some((r) => r.action === 'create' || r.action === 'update') ||
+                  !!saved.length ||
+                  !targetCluster ||
+                  !direct.ready
+                }
                 loading={busy}
                 onClick={() => compare(true)}
               >
-                {t('批量生成草稿')}
+                {direct.publish ? t('批量发布') : direct.label}
               </Button>
             </div>
           </Panel>
@@ -348,8 +378,10 @@ function TransferForm() {
           <Alert
             showIcon
             type="success"
-            title={t('已在目标环境生成 {0} 个草稿', saved.length)}
-            action={<Button onClick={() => go('/drafts', target)}>{t('打开目标草稿箱')}</Button>}
+            title={t('配置已发布到「{0}」', targetCluster?.name || '')}
+            action={
+              <Button onClick={() => go('/changes/' + saved, target)}>{t('查看发布记录')}</Button>
+            }
           />
         )}
       </div>

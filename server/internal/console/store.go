@@ -49,17 +49,17 @@ type scanner interface{ Scan(...any) error }
 
 func scanCluster(row scanner) (Cluster, error) {
 	var c Cluster
-	err := row.Scan(&c.ID, &c.Name, &c.Environment, &c.URL, &c.Description, &c.ReadOnly, &c.KeyCipher, &c.Version, &c.Status, &c.LastChecked, &c.CreatedAt)
+	err := row.Scan(&c.ID, &c.Name, &c.Environment, &c.URL, &c.Description, &c.ReadOnly, &c.KeyCipher, &c.Version, &c.Status, &c.LastChecked, &c.CreatedAt, &c.ProbeLatencyMS, &c.ProbeError)
 	return c, err
 }
 
-const clusterColumns = `id,name,environment,url,description,read_only,key_cipher,version,status,last_checked,created_at`
+const clusterColumns = `id,name,environment,url,description,read_only,key_cipher,version,status,last_checked,created_at,probe_latency_ms,probe_error`
 
 func (s *Store) Cluster(ctx context.Context, id string) (Cluster, error) {
-	return scanCluster(s.DB.QueryRowContext(ctx, `SELECT `+clusterColumns+` FROM clusters WHERE id=$1`, id))
+	return scanCluster(s.DB.QueryRowContext(ctx, `SELECT `+clusterColumns+` FROM clusters WHERE id=$1 AND removed_at IS NULL`, id))
 }
 func (s *Store) Clusters(ctx context.Context) ([]Cluster, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+clusterColumns+` FROM clusters WHERE ($1::text[] IS NULL OR id=ANY($1)) ORDER BY created_at`, identity(ctx).scope("view"))
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+clusterColumns+` FROM clusters WHERE removed_at IS NULL AND ($1::text[] IS NULL OR id=ANY($1)) ORDER BY created_at`, identity(ctx).scope("view"))
 	if err != nil {
 		return nil, err
 	}

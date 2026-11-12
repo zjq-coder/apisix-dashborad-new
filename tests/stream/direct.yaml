@@ -1,0 +1,24 @@
+services:
+  database:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_PASSWORD: direct-fixture-only
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 2s
+      timeout: 2s
+      retries: 20
+  console:
+    build: ../..
+    environment:
+      DATABASE_URL: postgres://postgres:direct-fixture-only@database:5432/postgres?sslmode=disable
+      DASHBOARD_USERNAME: fixture-admin
+      DASHBOARD_PASSWORD: direct-fixture-only
+      DASHBOARD_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+    depends_on:
+      database: { condition: service_healthy }
+  direct-test:
+    image: node:24-bookworm-slim
+    depends_on: [console, gateway, echo]
+    volumes: ['../../scripts/test-direct.mjs:/test.mjs:ro']
+    command: ['node', '/test.mjs']

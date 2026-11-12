@@ -69,6 +69,7 @@ func (g *HTTPGateway) PluginSchemaFor(ctx context.Context, name, scope string) (
 		schema, err = g.PluginSchema(ctx, name)
 	}
 	if err == nil {
+		normalizePluginSchema(schema)
 		g.schemas.Store("consumer/"+name, clone(schema))
 	}
 	return schema, err

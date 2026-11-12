@@ -6,6 +6,21 @@ import type { JsonObject } from '../types';
 import { activeSchema, KEEP_SECRET } from '../plugins';
 import { JsonField, KeyValueFields } from './Fields';
 import { isObject } from './config';
+import { distinctTypes, typeMatches, alternativeGroups } from './pluginGuide';
+
+function FieldHelp({ text }: { text: string }) {
+  const t = useTranslate();
+  if (text.length <= 100) return <>{text}</>;
+  const sentence = text.match(/^.{15,100}?[。；.!?](?:\s|$)?/u)?.[0] || text.slice(0, 85) + '…';
+  return (
+    <details className="plugin-field-help">
+      <summary>
+        {sentence} <span>{t('展开说明')}</span>
+      </summary>
+      <p>{text}</p>
+    </details>
+  );
+}
 
 function resolve(schema: JsonObject, root: JsonObject): JsonObject {
   if (schema.$ref?.startsWith('#/')) {
@@ -32,12 +47,19 @@ function typeOf(schema: JsonObject, value: unknown) {
 }
 function defaultFor(schema: JsonObject): unknown {
   if (schema.default !== undefined) return structuredClone(schema.default);
+  const choices = distinctTypes(schema);
+  if (choices.length) return defaultFor(choices[0]);
+  if (schema.anyOf?.some((part: JsonObject) => part.properties?.set && part.properties?.remove))
+    return {};
   return schema.type === 'object' || schema.properties
     ? {}
     : schema.type === 'array'
       ? []
       : ['integer', 'number'].includes(schema.type)
-        ? schema.minimum || 0
+        ? (schema.minimum ??
+          (typeof schema.exclusiveMinimum === 'number'
+            ? Math.floor(schema.exclusiveMinimum) + 1
+            : 0))
         : schema.type === 'boolean'
           ? false
           : '';
@@ -144,6 +166,62 @@ function SchemaValue({
   const t = useTranslate();
   const schema = resolve(original, root);
   const type = typeOf(schema, value);
+  if (
+    path.split('.').at(-1) === 'headers' &&
+    schema.anyOf?.length === 2 &&
+    isObject(value) &&
+    depth <= 5
+  ) {
+    const operations = schema.anyOf.find(
+      (part: JsonObject) => part.properties?.set && part.properties?.remove,
+    );
+    if (
+      operations &&
+      Object.keys(value).every((key) => Object.hasOwn(operations.properties, key))
+    ) {
+      return (
+        <SchemaFields
+          schema={operations}
+          root={root}
+          prefix={path}
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange}
+          depth={depth + 1}
+        />
+      );
+    }
+  }
+  const choices = distinctTypes(schema);
+  if (
+    choices.length &&
+    depth <= 5 &&
+    (value === undefined || choices.some((c) => typeMatches(c.type, value)))
+  ) {
+    const choice = choices.find((c) => typeMatches(c.type, value)) || choices[0];
+    const { oneOf, anyOf, ...common } = schema;
+    return (
+      <div className="schema-variant">
+        <Select
+          aria-label={t('{0} 的值类型', path)}
+          size="small"
+          value={choice.type}
+          disabled={readOnly}
+          options={choices.map((c) => ({ value: c.type, label: c.type }))}
+          onChange={(type) => onChange(defaultFor(choices.find((c) => c.type === type)!))}
+        />
+        <SchemaValue
+          schema={{ ...common, ...choice }}
+          root={root}
+          value={value}
+          path={path}
+          readOnly={readOnly}
+          depth={depth + 1}
+          onChange={onChange}
+        />
+      </div>
+    );
+  }
   if (
     schema.$ref ||
     schema.oneOf ||
@@ -348,6 +426,7 @@ export function SchemaFields({
   root = schema,
   readOnly = false,
   depth = 0,
+  filter = '',
 }: {
   schema: JsonObject;
   value: JsonObject;
@@ -357,13 +436,35 @@ export function SchemaFields({
   root?: JsonObject;
   readOnly?: boolean;
   depth?: number;
+  filter?: string;
 }) {
   const t = useTranslate();
   const effective = activeSchema(schema, value);
+  const groups = alternativeGroups(effective);
+  const selected =
+    groups.find((group) => group.every((key) => Object.hasOwn(value, key))) || groups[0] || [];
   const order = (key: string) =>
-    effective.required?.includes(key) ? effective.required.indexOf(key) : 1000;
+    effective.required?.includes(key)
+      ? effective.required.indexOf(key)
+      : selected.includes(key)
+        ? 200 + selected.indexOf(key)
+        : 1000;
   const properties = Object.entries(effective.properties || {})
     .filter(([key]) => key !== '_meta')
+    .filter(
+      ([key, field]) =>
+        !filter ||
+        [
+          key,
+          labels[key] && t(labels[key]),
+          (field as JsonObject).description,
+          root['x-field-help']?.[key],
+        ].some((text) =>
+          String(text || '')
+            .toLowerCase()
+            .includes(filter.trim().toLowerCase()),
+        ),
+    )
     .sort(([a], [b]) => order(a) - order(b));
   const patch = (key: string, next: unknown) => {
     const result = { ...value };
@@ -373,17 +474,30 @@ export function SchemaFields({
   };
   return (
     <div className="schema-fields">
+      {groups.length > 0 && (
+        <div className="schema-alternatives">
+          <strong>{t(effective.oneOf ? '选择一组配置' : '至少配置一组')}</strong>
+          {groups.map((group, i) => (
+            <Tag
+              key={i}
+              color={group.every((key) => Object.hasOwn(value, key)) ? 'green' : undefined}
+            >
+              {group.join(' + ')}
+            </Tag>
+          ))}
+        </div>
+      )}
       {properties.map(([key, def]) => {
         const field = resolve(def as JsonObject, root);
         const path = prefix ? `${prefix}.${key}` : key;
+        const help = root['x-field-help']?.[path.replace(/\[\d+\]/g, '')] || field.description;
         const complex =
           ['object', 'array'].includes(typeOf(field, value[key])) ||
-          field.anyOf ||
-          field.oneOf ||
+          ((field.anyOf || field.oneOf) && !distinctTypes(field).length) ||
           field.$ref;
         const required = effective.required?.includes(key);
         const label = (
-          <span>
+          <span data-plugin-label={path}>
             {labels[key] ? t(labels[key]) : key}
             {labels[key] && <code className="field-code">{key}</code>}
           </span>
@@ -405,8 +519,10 @@ export function SchemaFields({
                     ),
                     children: (
                       <>
-                        {field.description && (
-                          <p className="schema-description">{String(field.description)}</p>
+                        {help && (
+                          <div className="schema-description">
+                            <FieldHelp text={String(help)} />
+                          </div>
                         )}
                         {value[key] === undefined ? (
                           <Button disabled={readOnly} onClick={() => patch(key, defaultFor(field))}>
@@ -446,7 +562,7 @@ export function SchemaFields({
             key={key}
             label={label}
             required={required}
-            extra={field.description ? String(field.description).slice(0, 180) : undefined}
+            extra={help ? <FieldHelp text={String(help)} /> : undefined}
           >
             <SchemaValue
               schema={field}
@@ -460,7 +576,10 @@ export function SchemaFields({
           </Form.Item>
         );
       })}
-      {!properties.length && (
+      {!properties.length && filter && (
+        <span className="schema-alternatives">{t('没有匹配的配置项')}</span>
+      )}
+      {!properties.length && !filter && (
         <div className="schema-complex-field">
           <JsonField
             value={value}

@@ -1,0 +1,16 @@
+[
+  "acl",
+  "ai-cache",
+  "ai-lakera-guard",
+  "data-mask",
+  "dingtalk-auth",
+  "feishu-auth",
+  "graphql-limit-count",
+  "graphql-proxy-cache",
+  "ldap-auth-advanced",
+  "mcp-bridge",
+  "openapi-to-mcp",
+  "proxy-buffering",
+  "saml-auth",
+  "websocket-proxy"
+]

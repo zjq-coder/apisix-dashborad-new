@@ -12,7 +12,7 @@ export const isObject = (value: unknown): value is JsonObject =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 // Keep malformed imports editable in JSON without feeding invalid values to form controls.
-export function formTypeErrors(kind: ResourceKind, value: JsonObject): ConfigIssue[] {
+export function formTypeErrors(kind: ResourceKind | 'services', value: JsonObject): ConfigIssue[] {
   const result: ConfigIssue[] = [];
   const check = (
     object: JsonObject,
@@ -41,6 +41,22 @@ export function formTypeErrors(kind: ResourceKind, value: JsonObject): ConfigIss
     }
   };
   check(value, { name: 'string', desc: 'string', labels: 'object' }, '', 'match');
+  if (kind === 'services') {
+    check(
+      value,
+      { hosts: 'strings', upstream: 'object', enable_websocket: 'boolean', plugins: 'object' },
+      '',
+      'match',
+    );
+    if (isObject(value.plugins))
+      for (const [name, plugin] of Object.entries(value.plugins))
+        if (!isObject(plugin))
+          result.push({
+            path: 'plugins.' + name,
+            section: 'plugins',
+            message: `插件 ${name} 必须是配置对象`,
+          });
+  }
   if (kind === 'consumers') {
     check(value, { username: 'string', plugins: 'object' }, '', 'match');
     if (isObject(value.plugins)) {
@@ -363,12 +379,35 @@ export function expressionErrors(value: unknown, path = 'vars', depth = 0): stri
     .slice(start)
     .flatMap((node, i) => expressionErrors(node, `${path}[${i}]`, depth + 1));
 }
-export function validateConfig(kind: ResourceKind, value: JsonObject): ConfigIssue[] {
+export function validateConfig(kind: ResourceKind | 'services', value: JsonObject): ConfigIssue[] {
   const issues: ConfigIssue[] = formTypeErrors(kind, value);
   if (issues.length) return issues;
   const add = (path: string, message: string, section: EditorSection = 'match') =>
     issues.push({ path, message, section });
-  if (value.name !== undefined && (typeof value.name !== 'string' || value.name.length > 100))
+  if (kind === 'services') {
+    if (value.name !== undefined && (!value.name.trim() || [...value.name].length > 256))
+      add('name', '服务名称须为 1–256 个字符');
+    if (
+      'hosts' in value &&
+      (!value.hosts.length ||
+        new Set(value.hosts).size !== value.hosts.length ||
+        value.hosts.some((host: string) => !/^(?:\*|\*?[\w.:[\]-]+)$/.test(host)))
+    )
+      add('hosts', '域名必须有效且不能重复');
+    if (
+      'upstream_id' in value &&
+      !(
+        typeof value.upstream_id === 'string' && /^[a-zA-Z0-9._-]{1,64}$/.test(value.upstream_id)
+      ) &&
+      !(Number.isInteger(value.upstream_id) && value.upstream_id >= 1)
+    )
+      add('upstream_id', '请选择有效的上游 ID', 'upstream');
+    if ('upstream_id' in value && 'upstream' in value)
+      add('upstream', '内联上游与上游 ID 不能同时配置', 'upstream');
+  } else if (
+    value.name !== undefined &&
+    (typeof value.name !== 'string' || value.name.length > 100)
+  )
     add('name', '名称须为不超过 100 字的文本');
   if (
     value.labels !== undefined &&
@@ -489,6 +528,7 @@ export function validateConfig(kind: ResourceKind, value: JsonObject): ConfigIss
     if (upstream.checks?.passive && !upstream.checks?.active)
       add('checks', '被动检查需要同时配置主动检查以恢复节点', 'upstream');
     for (const [kind, health] of Object.entries(upstream.checks || {}) as [string, JsonObject][]) {
+      if (!isObject(health)) continue;
       for (const state of ['healthy', 'unhealthy']) {
         for (const [key, number] of Object.entries(health[state] || {})) {
           if (key === 'http_statuses') {

@@ -72,7 +72,7 @@ function Login({ onLogin }: { onLogin: (session: Session) => void }) {
           <p>
             {t('从路由匹配到上游转发，')}
             <br />
-            {t('从草稿编辑到审查发布。')}
+            {t('集中配置，一键发布。')}
             <br />
             {t('让网关管理回归简单。')}
           </p>
@@ -164,6 +164,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const atLogin = useMatch('/login') !== null;
+  const atConnections = useMatch('/clusters') !== null;
   const [explicitLogout, setExplicitLogout] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
@@ -223,7 +224,8 @@ export function AppShell() {
   }, [dark]);
   useEffect(() => {
     if (clusterId) localStorage.setItem('console.cluster', clusterId);
-  }, [clusterId]);
+    else if (clusters.data?.length === 0) localStorage.removeItem('console.cluster');
+  }, [clusterId, clusters.data?.length]);
   const endSession = useCallback(
     (explicit: boolean) => {
       void client.cancelQueries({ queryKey: ['session'] });
@@ -546,7 +548,11 @@ export function AppShell() {
                       <Spin />
                     </div>
                   ) : allowedPage(location.pathname) ? (
-                    <Outlet key={session.data.username + clusterId} />
+                    <Outlet
+                      key={
+                        atConnections ? session.data.username : session.data.username + clusterId
+                      }
+                    />
                   ) : (
                     <Alert type="warning" showIcon title={t('没有此操作的权限')} />
                   )}

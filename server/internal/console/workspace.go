@@ -19,7 +19,7 @@ func (s *Server) workspace(w http.ResponseWriter, r *http.Request) {
 			FROM changesets WHERE cluster_id = c.id
 			ORDER BY created_at DESC, id LIMIT 4
 		) h), '[]')
-		FROM clusters c WHERE c.id = $1`
+		FROM clusters c WHERE c.id = $1 AND c.removed_at IS NULL`
 	var drafts, changes json.RawMessage
 	err := s.Store.DB.QueryRowContext(r.Context(), query, r.PathValue("cluster")).Scan(&drafts, &changes)
 	if err != nil {

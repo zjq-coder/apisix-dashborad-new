@@ -12,6 +12,8 @@ export interface Cluster {
   status: string;
   version: string;
   last_checked: string | null;
+  probe_latency_ms?: number | null;
+  probe_error?: string;
   created_at: string;
 }
 export interface Resource {
@@ -76,6 +78,7 @@ export interface Check {
   message: string;
 }
 export interface Validation {
+  preview?: Pick<Operation, 'before' | 'after' | 'diff'>;
   ok: boolean;
   checks: Check[];
 }

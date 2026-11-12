@@ -28,6 +28,7 @@ type Server struct {
 	passwordHash  []byte
 	mux           *http.ServeMux
 	workers       sync.WaitGroup
+	stopProbes    context.CancelFunc
 	loginMu       sync.Mutex
 	loginAttempts map[string][]time.Time
 }
@@ -56,9 +57,19 @@ func NewServer(ctx context.Context, c Config) (*Server, error) {
 	c.Password = ""
 	s := &Server{Store: store, config: c, passwordHash: pw, mux: http.NewServeMux(), loginAttempts: map[string][]time.Time{}}
 	s.routes()
+	probeCtx, stop := context.WithCancel(context.Background())
+	s.stopProbes = stop
+	s.workers.Add(1)
+	go func() { defer s.workers.Done(); s.probeLoop(probeCtx) }()
 	return s, nil
 }
-func (s *Server) Close() { s.workers.Wait(); _ = s.Store.DB.Close() }
+func (s *Server) Close() {
+	if s.stopProbes != nil {
+		s.stopProbes()
+	}
+	s.workers.Wait()
+	_ = s.Store.DB.Close()
+}
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -92,12 +103,16 @@ func (s *Server) routes() {
 	s.handle("GET /api/v1/clusters/{cluster}/workspace", "view", "workspace.read", s.workspace)
 	s.handle("POST /api/v1/clusters", "admin", "cluster.save", s.saveCluster)
 	s.handle("PUT /api/v1/clusters/{cluster}", "admin", "cluster.save", s.saveCluster)
+	s.handle("DELETE /api/v1/clusters/{cluster}", "admin", "cluster.delete", s.deleteCluster)
 	s.handle("POST /api/v1/clusters/{cluster}/probe", "admin", "cluster.probe", s.probeCluster)
 	s.handle("POST /api/v1/clusters/{cluster}/validate", "view", "resource.validate", s.validateConfig)
 	s.handle("GET /api/v1/clusters/{cluster}/resources/{kind}", "view", "resource.list", s.listResources)
 	s.handle("GET /api/v1/clusters/{cluster}/resources/{kind}/{resource}", "view", "resource.read", s.getResource)
 	s.handle("GET /api/v1/clusters/{cluster}/resources/{kind}/{resource}/impact", "view", "resource.impact", s.resourceImpact)
 	s.handle("POST /api/v1/clusters/{cluster}/export", "view", "bundle.export", s.exportResources)
+	s.handle("POST /api/v1/clusters/{cluster}/config/{mode}", "edit", "config.save", s.saveDraft)
+	s.handle("POST /api/v1/clusters/{cluster}/routes/batch-delete/{mode}", "edit", "config.batch-delete", s.deleteRouteDrafts)
+	s.handle("POST /api/v1/clusters/{cluster}/routes/delete-drafts", "edit", "draft.save", s.deleteRouteDrafts)
 	s.handle("POST /api/v1/clusters/{cluster}/transfer/{step}", "view", "bundle.transfer", s.transfer)
 	s.handle("GET /api/v1/clusters/{cluster}/plugins", "view", "plugin.list", s.listPlugins)
 	s.handle("GET /api/v1/clusters/{cluster}/plugins/catalog", "view", "plugin.catalog", s.pluginCatalog)

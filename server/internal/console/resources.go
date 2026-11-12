@@ -1,9 +1,12 @@
 package console
 
 import (
+	"context"
+	"database/sql"
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 )
 
 func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
@@ -13,6 +16,49 @@ func (s *Server) listClusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, 200, items)
+}
+func (s *Server) deleteCluster(w http.ResponseWriter, r *http.Request) {
+	ctx, id := r.Context(), r.PathValue("cluster")
+	unlock, err := s.Store.LockCluster(ctx, id)
+	if err != nil {
+		fail(w, 409, err.Error())
+		return
+	}
+	defer unlock()
+	tx, err := s.Store.DB.BeginTx(ctx, nil)
+	if err != nil {
+		dbError(w, err)
+		return
+	}
+	defer tx.Rollback()
+	var publishing bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT FROM changesets WHERE cluster_id=$1 AND status='publishing')`, id).Scan(&publishing); err != nil {
+		dbError(w, err)
+		return
+	}
+	if publishing {
+		fail(w, 409, "集群正在发布，暂时不能删除连接")
+		return
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE clusters SET removed_at=now(),key_cipher='',read_only=true WHERE id=$1 AND removed_at IS NULL`, id)
+	if err != nil {
+		dbError(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		dbError(w, sql.ErrNoRows)
+		return
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM console_grants WHERE cluster_id=$1`, id); err != nil {
+		dbError(w, err)
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		dbError(w, err)
+		return
+	}
+	markAudit(r, id, id, "")
+	reply(w, 200, Object{"id": id})
 }
 func (s *Server) saveCluster(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -84,7 +130,7 @@ func (s *Server) saveCluster(w http.ResponseWriter, r *http.Request) {
 		id = newID()
 		_, err = s.Store.DB.ExecContext(r.Context(), `INSERT INTO clusters(id,name,environment,url,description,read_only,key_cipher) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, in.Name, in.Environment, base, in.Description, in.ReadOnly, keyCipher)
 	} else {
-		_, err = s.Store.DB.ExecContext(r.Context(), `UPDATE clusters SET name=$2,environment=$3,url=$4,description=$5,read_only=$6,key_cipher=$7,status='unchecked',last_checked=NULL WHERE id=$1`, id, in.Name, in.Environment, base, in.Description, in.ReadOnly, keyCipher)
+		_, err = s.Store.DB.ExecContext(r.Context(), `UPDATE clusters SET name=$2,environment=$3,url=$4,description=$5,read_only=$6,key_cipher=$7,status='unchecked',last_checked=NULL,probe_error='',probe_latency_ms=NULL,next_probe_at=now() WHERE id=$1 AND removed_at IS NULL`, id, in.Name, in.Environment, base, in.Description, in.ReadOnly, keyCipher)
 	}
 	if err != nil {
 		dbError(w, err)
@@ -99,32 +145,41 @@ func (s *Server) saveCluster(w http.ResponseWriter, r *http.Request) {
 	reply(w, 200, c)
 }
 func (s *Server) probeCluster(w http.ResponseWriter, r *http.Request) {
-	c, g, err := s.gateway(r.Context(), r.PathValue("cluster"))
+	ctx := r.Context()
+	var p probeTarget
+	err := s.Store.DB.QueryRowContext(ctx, `UPDATE clusters SET next_probe_at=now()+interval '1 minute'
+		WHERE id=$1 AND removed_at IS NULL RETURNING id,url,key_cipher,next_probe_at`, r.PathValue("cluster")).Scan(&p.id, &p.url, &p.key, &p.due)
 	if err != nil {
 		dbError(w, err)
 		return
 	}
-	routes, routeErr := g.List(r.Context(), "routes")
-	upstreams, upstreamErr := g.List(r.Context(), "upstreams")
-	plugins, pluginErr := g.Plugins(r.Context())
+	g, plugins, pluginErr, err := s.checkConnectivity(ctx, p)
+	if err != nil {
+		dbError(w, err)
+		return
+	}
+	var routes, upstreams int
+	routeErr, upstreamErr := pluginErr, pluginErr
+	if g != nil {
+		diagnostics, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		routes, routeErr = g.collectionCount(diagnostics, "routes")
+		upstreams, upstreamErr = g.collectionCount(diagnostics, "upstreams")
+	}
 	checks := []Check{{Name: "路由读取", OK: routeErr == nil, Message: "可读取路由配置"}, {Name: "上游读取", OK: upstreamErr == nil, Message: "可读取上游配置"}, {Name: "插件发现", OK: pluginErr == nil, Message: "可获取目标集群插件"}}
 	for i, e := range []error{routeErr, upstreamErr, pluginErr} {
 		if e != nil {
 			checks[i].Message = e.Error()
 		}
 	}
-	status := "connected"
-	if routeErr != nil || upstreamErr != nil || pluginErr != nil {
-		status = "error"
+	ok := checksOK(checks)
+	auditCheck(r, ok)
+	markAudit(r, p.id, p.id, "")
+	version := ""
+	if g != nil {
+		version = g.Version
 	}
-	_, err = s.Store.DB.ExecContext(r.Context(), `UPDATE clusters SET status=$2,last_checked=now(),version=$3 WHERE id=$1`, c.ID, status, g.Version)
-	if err != nil {
-		dbError(w, err)
-		return
-	}
-	auditCheck(r, status == "connected")
-	markAudit(r, c.ID, c.ID, status)
-	reply(w, 200, Object{"ok": status == "connected", "checks": checks, "routes": len(routes), "upstreams": len(upstreams), "plugins": len(plugins), "version": g.Version})
+	reply(w, 200, Object{"ok": ok, "checks": checks, "routes": routes, "upstreams": upstreams, "plugins": plugins, "version": version})
 }
 func (s *Server) listResources(w http.ResponseWriter, r *http.Request) {
 	kind := r.PathValue("kind")

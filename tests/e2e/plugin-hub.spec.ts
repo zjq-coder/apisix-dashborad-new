@@ -116,7 +116,10 @@ test('真实集群的启用列表、每项配置结构、目录扩展和两种 S
   await page.getByRole('button', { name: '查看插件 ldap-auth-advanced', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('textbox', { name: '插件 Schema' })).toBeVisible();
-  await expect(dialog.getByRole('link', { name: '官方插件文档' })).toHaveCount(0);
+  await expect(dialog.getByRole('link', { name: '官方插件文档' })).toHaveAttribute(
+    'href',
+    'https://apisix.apache.org/zh/docs/apisix/plugins/ldap-auth-advanced/',
+  );
   await page.keyboard.press('Escape');
   await pickCategory(page, 'Serverless');
   for (const name of ['serverless-pre-function', 'serverless-post-function']) {
@@ -131,6 +134,8 @@ test('真实集群的启用列表、每项配置结构、目录扩展和两种 S
       'https://apisix.apache.org/zh/docs/apisix/plugins/serverless/',
     );
     await expect(dialog.getByRole('textbox', { name: '插件 Schema' })).toBeVisible();
+    await dialog.getByText('官方详细说明', { exact: true }).click();
+    await expect(dialog.locator('details[open] p').first()).toContainText(/serverless/i);
     await page.keyboard.press('Escape');
   }
 });
@@ -233,7 +238,7 @@ test('桌面浅色、深色、平板和手机端图标与筛选布局', async ({
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog')).toBeVisible();
   expect(
-    await page.getByRole('dialog').evaluate((el) => el.getBoundingClientRect().width),
+    await page.getByRole('dialog').evaluate((el) => Math.round(el.getBoundingClientRect().width)),
   ).toBeLessThanOrEqual(390);
   expect(errors).toEqual([]);
 });
@@ -258,7 +263,7 @@ for (const scope of ['路由', '消费者'] as const) {
       dialog.getByText(scope === '路由' ? '此插件与消费者配置关联' : '在此设置消费者凭据或策略'),
     ).toBeVisible();
     if (scope === '路由') {
-      await dialog.getByRole('button', { name: '应用到路由草稿' }).click();
+      await dialog.getByRole('button', { name: '应用到路由' }).click();
       await expect(page.locator('.attached-plugin img')).toHaveAttribute(
         'src',
         '/plugin-icons/symbols/iconbasic-auth.svg',

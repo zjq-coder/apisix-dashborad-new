@@ -52,6 +52,36 @@ func validateRoutePlugins(ctx context.Context, g Gateway, value Object) error {
 	return nil
 }
 
+// Lua CJSON can serialize the empty table used by an array default as {}.
+// Normalize only schema annotations, never a user-supplied plugin value.
+func normalizePluginSchema(schema map[string]any) {
+	if kind, ok := schema["type"].(string); ok && kind == "array" {
+		if def, ok := schema["default"].(map[string]any); ok && len(def) == 0 {
+			schema["default"] = []any{}
+		}
+	}
+	for _, key := range []string{"properties", "patternProperties", "definitions", "$defs", "dependencies", "dependentSchemas"} {
+		children, _ := schema[key].(map[string]any)
+		for _, child := range children {
+			if node, ok := child.(map[string]any); ok {
+				normalizePluginSchema(node)
+			}
+		}
+	}
+	for _, key := range []string{"items", "additionalProperties", "allOf", "oneOf", "anyOf", "if", "then", "else", "not"} {
+		switch node := schema[key].(type) {
+		case map[string]any:
+			normalizePluginSchema(node)
+		case []any:
+			for _, child := range node {
+				if branch, ok := child.(map[string]any); ok {
+					normalizePluginSchema(branch)
+				}
+			}
+		}
+	}
+}
+
 func applySchemaDefaults(schema map[string]any, value any) {
 	switch obj := value.(type) {
 	case map[string]any:

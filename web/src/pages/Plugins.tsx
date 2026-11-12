@@ -14,6 +14,7 @@ import { api } from '../api';
 import { useConsole } from '../context';
 import { Blank, Loading, NoCluster, PageTitle, Panel, RequestError } from '../components/Common';
 import { PluginIcon } from '../components/PluginIcon';
+import { pluginGuide, pluginSetup, nonRouteSettings } from '../editor/pluginGuide';
 import {
   catalogEntries,
   extensionCategory,
@@ -259,6 +260,17 @@ export function PluginCatalog() {
                   <Tag color="green">{t('集群可用')}</Tag>
                 </Space>
                 <p>{t(detail.description)}</p>
+                {!!pluginGuide(detail.name, locale)?.overview.length && (
+                  <details className="plugin-guide-examples">
+                    <summary>{t('官方详细说明')}</summary>
+                    {pluginGuide(detail.name, locale).overview.map((paragraph) => (
+                      <p key={paragraph}>{paragraph}</p>
+                    ))}
+                  </details>
+                )}
+                {pluginSetup[detail.name] && (
+                  <p className="form-hint">{t(pluginSetup[detail.name])}</p>
+                )}
               </div>
             </div>
             <Space className="catalog-detail-actions" wrap>
@@ -272,8 +284,25 @@ export function PluginCatalog() {
                   {t('官方插件文档')}
                 </Button>
               )}
-              <Button onClick={() => go('/routes')}>{t('前往路由管理')}</Button>
+              {!nonRouteSettings[detail.name] && (
+                <Button onClick={() => go('/routes')}>{t('前往路由管理')}</Button>
+              )}
             </Space>
+            {detail.docs && !!pluginGuide(detail.name, locale)?.examples.length && (
+              <details className="plugin-guide-examples">
+                <summary>{t('官方配置示例')}</summary>
+                {pluginGuide(detail.name, locale).examples.map(({ title, anchor }) => (
+                  <a
+                    key={anchor}
+                    href={officialUrl(detail.docs!, locale) + '#' + encodeURIComponent(anchor)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {title} <ExportOutlined />
+                  </a>
+                ))}
+              </details>
+            )}
             <div className="catalog-schema-heading">
               <h3>{t('配置结构')}</h3>
             </div>

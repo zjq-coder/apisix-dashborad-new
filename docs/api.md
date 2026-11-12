@@ -10,17 +10,21 @@
 
 | 方法 | 路径 | 语义 |
 | --- | --- | --- |
-| GET / POST | `/clusters` | 列表 / 接入集群 |
+| GET / POST | `/clusters` | 返回当前账号可见的有效连接 / 管理员接入集群。列表含最近一次探测的 `status`、`last_checked`、`probe_latency_ms` 和失败时的 `probe_error`，读取列表不会触发网关请求。 |
 | PUT | `/clusters/{id}` | 更新名称、说明、凭据或只读属性；地址和环境固定 |
-| POST | `/clusters/{id}/probe` | 读取资源与插件，返回能力检查和版本 |
+| DELETE | `/clusters/{id}` | 管理员解除接入，清除管理密钥和授权，保留历史记录。成功返回 `200 {"id":"…"}`。正在发布时返回 409，已移除返回 404。 |
+| POST | `/clusters/{id}/probe` | 手动触发插件列表连通性检测及路由、上游读取权限检测，返回 `ok/checks/routes/upstreams/plugins/version`。定时探测只读插件列表。 |
 | GET | `/clusters/{id}/workspace` | 从 PostgreSQL 读取所选环境最近更新的 4 份待审草稿和最近创建的 4 项变更。返回 `drafts/changes` 元数据数组，空集群返回空数组，未知集群返回 404。配置正文和差异在打开详情时读取。 |
-| GET | `/clusters/{id}/resources/{routes\|upstreams\|consumers\|services\|plugin_configs}` | 实时资源列表，响应 `items/total`；后两种仅供读取和引用；消费者按 username 寻址，密钥脱敏 |
-| POST | `/clusters/{id}/validate` | 校验未保存的路由/上游/消费者快照，返回 `ok/checks`；不创建草稿或写入网关 |
+| GET | `/clusters/{id}/resources/{routes\|upstreams\|consumers\|services\|plugin_configs}` | 实时资源列表，响应 `items/total`；消费者按 username 寻址，密钥脱敏 |
+| POST | `/clusters/{id}/validate` | 校验未保存的资源，返回 `ok/checks`。传 `include_diff: true` 后，校验通过时附带脱敏的 `preview.before/after/diff` |
 | GET | `/clusters/{id}/resources/{kind}/{resourceID}` | 资源、配置哈希、修改索引 |
 | GET | `/clusters/{id}/plugins` | 已启用插件名称列表 |
 | GET | `/clusters/{id}/plugins/catalog` | 当前启用插件的元数据；包含 type/scope、消费者可配置性、消费者 Schema 来源和声明的敏感字段 |
 | GET | `/clusters/{id}/plugins/{name}/schema?scope=route\|consumer` | 目标插件在对应上下文中的 Schema，默认 route |
 | POST | `/clusters/{id}/plugins/{name}/validate` | 校验插件，接收 `value`、`resource_type: routes\|consumers`（默认 routes）；编辑已有秘密时附 `resource_id` 或 `draft_id`，草稿与目标资源必须一致 |
+| POST | `/clusters/{id}/config/{mode}` | 创建、修改或删除单项网关配置 |
+| POST | `/clusters/{id}/routes/batch-delete/{mode}` | 一次提交 1–50 条路由的 ID 与版本哈希 |
+| POST | `/clusters/{id}/transfer/{mode}` | 使用差异预览返回的 token 提交整个配置包 |
 | GET / POST | `/drafts` | 列表 / 创建草稿；列表支持 `cluster_id` |
 | GET / PUT / DELETE | `/drafts/{id}` | 查看 / 更新 / 丢弃草稿 |
 | POST | `/drafts/{id}/validate` | 返回 `ok/checks`，不写入网关 |
@@ -40,6 +44,12 @@
 `grants` 形如 `{"<cluster-id>":["edit","audit"],"<another-id>":[]}`。出现集群 ID 即可读取该集群；未出现则无访问权限。管理员具有全局权限，`grants` 为空对象。创建账号要求 `username/password/role/enabled`；更新时提交 `revision/role/enabled/grants`，省略或留空 `password` 保留当前密码。删除传 `{"revision":当前版本}`。修改、轮换或停用账号会撤销该账号的所有现有会话。账号响应不返回密码、哈希或会话令牌。详见[权限矩阵](access-control.md)。
 
 没有会话为 401；能访问集群但不能执行该操作为 403；无法访问的集群、草稿或变更详情与不存在的对象一样返回 404。省略 `cluster_id` 不会扩大可见范围。
+
+## 直接提交和发布
+
+`mode=apply` 需要目标集群的编辑与发布权限，`mode=submit` 需要编辑权限。生产环境直接发布还需在 `X-Confirm-Cluster` 请求头中传入 URL 编码后的集群名称。两种模式都会生成一条变更记录。HTTP 201 表示受理成功，返回 `id/cluster_id/status`。通过 `GET /changesets/{id}` 查看最终结果和脱敏差异。提交待发布变更后，发布人可以通过原有的发布接口执行。
+
+单资源请求包含 `resource_type/resource_id/action`。新建或修改时传完整 `value`，修改和删除时传读取资源时的 `base_hash`。从历史草稿继续编辑时附上 `draft_id/revision`，服务端原子地提交该修订。普通直接发布不写入草稿表。
 
 ## 草稿请求
 
@@ -82,7 +92,7 @@
 
 敏感值在列表、详情、草稿和发布记录中返回 `${dashboard:keep-secret}`；原样提交保留原值，新建字段不能使用占位符。服务端结合字段名规则与 Schema 的 `encrypt_fields`、属性 `writeOnly/format: password` 计算敏感路径，并随加密快照保存，保证发布历史和回退预览沿用相同脱敏规则。
 
-消费者优先使用目标网关 `consumer_schema`；目标明确返回该上下文不支持时使用共享 Schema。目录接口将有消费者 Schema 的插件识别为凭据插件，并兼容 Wolf 的共享 Schema；`multi-auth` 只在路由组合认证，不能作为消费者凭据。JSON Schema 校验外补充 JWT 密钥/公钥与 Base64 要求、JWE 解码后 32 字节要求。发布前检查各认证方式的身份标识重复与消费者组引用，最终写入仍执行 APISIX 自身的 Lua 校验。所有消费者写操作复用草稿/发布流程及只读保护。
+消费者优先使用目标网关 `consumer_schema`；目标明确返回该上下文不支持时使用共享 Schema。目录接口将有消费者 Schema 的插件识别为凭据插件，并兼容 Wolf 的共享 Schema；`multi-auth` 只在路由组合认证，不能作为消费者凭据。JSON Schema 校验外补充 JWT 密钥/公钥与 Base64 要求、JWE 解码后 32 字节要求。发布前检查各认证方式的身份标识重复与消费者组引用，最终写入仍执行 APISIX 自身的 Lua 校验。消费者写操作使用统一的配置发布流程及只读保护。
 
 创建发布变更：
 

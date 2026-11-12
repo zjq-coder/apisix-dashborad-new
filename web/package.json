@@ -1,6 +1,6 @@
 {
   "name": "@apisix-console/web",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,8 @@
     "monaco-editor": "^0.57.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.9.5"
+    "react-router-dom": "^7.9.5",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.2",

@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { DiffView } from '../components/DiffView';
+import { useConfigWrite } from '../useConfigWrite';
+import { RouteActionDialog } from './RouteActions';
+import { useCallback, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -8,7 +11,6 @@ import {
   Form,
   Input,
   Modal,
-  Popconfirm,
   Select,
   Space,
   Table,
@@ -19,6 +21,10 @@ import { useSearchParams } from 'react-router-dom';
 import { api, post } from '../api';
 import { useConsole } from '../context';
 import { useTranslate } from '../i18n';
+import { useFeedback } from '../i18n/feedback';
+import { BufferContext } from '../editor/Fields';
+import { formTypeErrors, validateConfig } from '../editor/config';
+import { ServiceFields } from '../editor/ServiceFields';
 import { PluginManager } from '../components/PluginManager';
 import { Checks, NoCluster, PageTitle, Panel, RequestError } from '../components/Common';
 import {
@@ -34,7 +40,7 @@ const templates: Record<string, JsonObject> = {
   plugin_configs: { desc: '', plugins: {} },
   global_rules: { plugins: {} },
   plugin_metadata: { log_format: { host: '$host' } },
-  services: { name: '', upstream_id: '', plugins: {} },
+  services: { upstream_id: '', plugins: {} },
   stream_routes: { server_port: 9100, upstream_id: '' },
   protos: { content: 'syntax = "proto3";\npackage example;\nmessage Ping { string text = 1; }' },
   secrets: { uri: 'https://vault.example.org', prefix: '/kv', token: '' },
@@ -53,7 +59,6 @@ const extended = [
   'ssls',
 ];
 const fields: Record<string, string[]> = {
-  services: ['name', 'upstream_id'],
   protos: ['content'],
   stream_routes: ['server_port', 'upstream_id'],
   secrets: ['uri', 'prefix', 'token'],
@@ -93,7 +98,8 @@ export function ManagedEditor({
   onDone: () => void;
 }) {
   const t = useTranslate();
-  const { clusterId, cluster, can, refresh } = useConsole();
+  const { clusterId } = useConsole();
+  const direct = useConfigWrite();
   const [id, setId] = useState(
     draft?.resource_id ||
       item?.id ||
@@ -107,9 +113,21 @@ export function ManagedEditor({
     return pretty(v);
   });
   const [err, setErr] = useState<unknown>();
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'validate' | 'write' | null>(null);
   const [validation, setValidation] = useState<Validation>();
+  const editVersion = useRef(0);
   const [confirm, setConfirm] = useState(false);
+  const feedback = useFeedback();
+  const [buffers, setBuffers] = useState<Record<string, string>>({});
+  const reportBuffer = useCallback((scope: string, issue: string) => {
+    setBuffers((current) => {
+      if ((current[scope] || '') === issue) return current;
+      const next = { ...current };
+      if (issue) next[scope] = issue;
+      else delete next[scope];
+      return next;
+    });
+  }, []);
   let obj: JsonObject | undefined;
   try {
     const v = JSON.parse(raw);
@@ -118,6 +136,7 @@ export function ManagedEditor({
     /* Keep incomplete JSON editable. */
   }
   const update = (next: string) => {
+    editVersion.current++;
     setRaw(next);
     setValidation(undefined);
     setErr(undefined);
@@ -140,41 +159,96 @@ export function ManagedEditor({
           : fields.secrets
       : fields[kind];
   const global = kind === 'global_rules' || kind === 'plugin_metadata';
+  const service = kind === 'services';
+  const creating = !item && (!draft || draft.action === 'create');
+  const shapeErrors = service && obj ? formTypeErrors('services', obj) : [];
+  const issues =
+    service && obj
+      ? [
+          ...Object.values(buffers),
+          ...(creating && !obj.name ? ['请填写服务名称'] : []),
+          ...validateConfig('services', obj).map((issue) => issue.message),
+        ]
+      : [];
+  const ready = !!obj && !!id && !issues.length;
   async function submit(validate: boolean) {
-    if (!obj || !id) return;
-    setBusy(true);
+    if (!ready || !obj || pendingAction) return;
+    setPendingAction(validate ? 'validate' : 'write');
     setErr(undefined);
     try {
       const body = { resource_id: id, resource_type: kind, value: obj };
-      if (validate)
-        setValidation(
-          await post<Validation>('/clusters/' + clusterId + '/validate', {
-            ...body,
-            draft_id: draft?.id,
-          }),
-        );
-      else {
-        await api('/drafts' + (draft ? '/' + draft.id : ''), {
-          method: draft ? 'PUT' : 'POST',
-          body: JSON.stringify({
-            ...body,
-            cluster_id: clusterId,
-            base_hash: item?.hash,
-            action: draft?.action || (item ? 'update' : 'create'),
-            revision: draft?.revision,
-          }),
+      if (validate) {
+        const version = editVersion.current;
+        const result = await post<Validation>('/clusters/' + clusterId + '/validate', {
+          ...body,
+          draft_id: draft?.id,
+          include_diff: true,
         });
-        refresh();
-        onDone();
+        if (editVersion.current === version) setValidation(result);
+      } else {
+        const change = await direct.write({
+          ...body,
+          draft_id: draft?.id,
+          revision: draft?.revision,
+          base_hash: draft?.base_hash || item?.hash,
+          action: draft?.action || (item ? 'update' : 'create'),
+        });
+        if (change.status === 'succeeded') onDone();
       }
     } catch (e) {
       setErr(e);
     } finally {
-      setBusy(false);
+      setPendingAction(null);
     }
   }
+  const identity = (
+    <Form.Item
+      label={
+        kind === 'plugin_metadata'
+          ? t('插件名称')
+          : kind === 'secrets'
+            ? t('管理器:标识')
+            : kind === 'credentials'
+              ? t('消费者:凭据标识')
+              : t('资源 ID')
+      }
+      required
+    >
+      <Input
+        aria-label={t('资源 ID')}
+        disabled={!!item || !!draft}
+        value={id}
+        onChange={(e) => {
+          editVersion.current++;
+          setId(e.target.value);
+          setValidation(undefined);
+        }}
+      />
+    </Form.Item>
+  );
+  const json = (
+    <Form.Item
+      label={t('完整 JSON 配置')}
+      validateStatus={!obj || shapeErrors.length ? 'error' : undefined}
+      help={
+        !obj
+          ? t('请输入有效的 JSON 对象')
+          : shapeErrors.length
+            ? feedback(shapeErrors[0].message)
+            : undefined
+      }
+    >
+      <Input.TextArea
+        aria-label={t('完整 JSON 配置')}
+        className="ops-code"
+        rows={service ? 15 : 9}
+        value={raw}
+        onChange={(e) => update(e.target.value)}
+      />
+    </Form.Item>
+  );
   return (
-    <Form layout="vertical">
+    <Form layout="vertical" component="div">
       {kind === 'secrets' && !draft && !item && (
         <Form.Item label={t('密钥管理器')}>
           <Select
@@ -187,28 +261,22 @@ export function ManagedEditor({
           />
         </Form.Item>
       )}
-      <Form.Item
-        label={
-          kind === 'plugin_metadata'
-            ? t('插件名称')
-            : kind === 'secrets'
-              ? t('管理器:标识')
-              : kind === 'credentials'
-                ? t('消费者:凭据标识')
-                : t('资源 ID')
-        }
-        required
-      >
-        <Input
-          aria-label={t('资源 ID')}
-          disabled={!!item || !!draft}
-          value={id}
-          onChange={(e) => {
-            setId(e.target.value);
-            setValidation(undefined);
-          }}
-        />
-      </Form.Item>
+      {service ? (
+        <BufferContext.Provider value={reportBuffer}>
+          <ServiceFields
+            value={shapeErrors.length ? undefined : obj}
+            identity={identity}
+            json={json}
+            resourceId={item?.id || draft?.resource_id}
+            draftId={draft?.id}
+            creating={creating}
+            pending={!!Object.keys(buffers).length}
+            onChange={(v) => update(pretty(v))}
+          />
+        </BufferContext.Provider>
+      ) : (
+        identity
+      )}
       {!!formFields?.length && (
         <Space orientation="vertical" style={{ width: '100%' }}>
           {formFields.map((key) => (
@@ -248,9 +316,7 @@ export function ManagedEditor({
         </Space>
       )}
       {obj &&
-        ['plugin_configs', 'services', 'global_rules', 'consumer_groups', 'credentials'].includes(
-          kind,
-        ) && (
+        ['plugin_configs', 'global_rules', 'consumer_groups', 'credentials'].includes(kind) && (
           <PluginManager
             value={obj.plugins || {}}
             resourceType={kind}
@@ -260,19 +326,7 @@ export function ManagedEditor({
             onChange={(plugins) => update(pretty({ ...obj, plugins }))}
           />
         )}
-      <Form.Item
-        label={t('完整 JSON 配置')}
-        validateStatus={!obj ? 'error' : undefined}
-        help={!obj ? t('请输入有效的 JSON 对象') : undefined}
-      >
-        <Input.TextArea
-          aria-label={t('完整 JSON 配置')}
-          className="ops-code"
-          rows={9}
-          value={raw}
-          onChange={(e) => update(e.target.value)}
-        />
-      </Form.Item>
+      {!service && json}
       {global && (
         <Form.Item>
           <Checkbox checked={confirm} onChange={(e) => setConfirm(e.target.checked)}>
@@ -280,19 +334,34 @@ export function ManagedEditor({
           </Checkbox>
         </Form.Item>
       )}
+      {direct.confirmationField}
       {err ? <RequestError error={err} /> : null}
       {validation && <Checks checks={validation.checks} />}
-      <Space wrap>
-        <Button disabled={!obj || !id} loading={busy} onClick={() => submit(true)}>
+      {validation?.preview && <DiffView {...validation.preview} />}
+      {issues.length > 0 && (
+        <div className="form-hint service-issues" role="status">
+          {[...new Set(issues.map(feedback))].join(' · ')}
+        </div>
+      )}
+      <Space wrap className={service ? 'service-editor-actions' : undefined}>
+        <Button
+          aria-label={t('校验配置')}
+          aria-busy={pendingAction === 'validate'}
+          disabled={!ready || pendingAction !== null}
+          loading={pendingAction === 'validate'}
+          onClick={() => submit(true)}
+        >
           {t('校验配置')}
         </Button>
         <Button
           type="primary"
-          loading={busy}
-          disabled={!obj || !id || !can('edit') || cluster?.read_only || (global && !confirm)}
+          aria-label={direct.label}
+          aria-busy={pendingAction === 'write'}
+          loading={pendingAction === 'write'}
+          disabled={!ready || pendingAction !== null || !direct.ready || (global && !confirm)}
           onClick={() => submit(false)}
         >
-          {t('保存草稿')}
+          {direct.label}
         </Button>
       </Space>
     </Form>
@@ -327,12 +396,12 @@ export function Managed({ policy }: { policy: boolean }) {
   );
 }
 function ManagedList({ kind }: { kind: string }) {
-  const { clusterId, cluster, can, go, refresh } = useConsole();
+  const { clusterId, cluster, can } = useConsole();
+  const [removing, setRemoving] = useState<Resource>();
   const t = useTranslate();
   const [owner, setOwner] = useState('');
   const [edit, setEdit] = useState<Resource | 'new'>();
   const [impact, setImpact] = useState<Resource>();
-  const [err, setErr] = useState<unknown>();
   const [params] = useSearchParams();
   const [q, setQ] = useState(() => (kind === 'plugin_configs' ? params.get('resource') || '' : ''));
   const base = '/clusters/' + clusterId + '/resources/';
@@ -359,21 +428,6 @@ function ManagedList({ kind }: { kind: string }) {
   });
   const writable = kind !== 'ssls' && can('edit') && !cluster?.read_only;
   const available = !list.error && (kind !== 'credentials' || !!owner);
-  async function remove(item: Resource) {
-    try {
-      await post('/drafts', {
-        cluster_id: clusterId,
-        resource_type: kind,
-        resource_id: item.id,
-        action: 'delete',
-        base_hash: item.hash,
-      });
-      refresh();
-      go('/drafts');
-    } catch (e) {
-      setErr(e);
-    }
-  }
   return (
     <Panel
       title={t(kindNames[kind])}
@@ -384,7 +438,7 @@ function ManagedList({ kind }: { kind: string }) {
             disabled={!writable || !available || list.isLoading}
             onClick={() => setEdit('new')}
           >
-            {t('新建草稿')}
+            {t('新建配置')}
           </Button>
         )
       }
@@ -414,11 +468,10 @@ function ManagedList({ kind }: { kind: string }) {
       {kind === 'global_rules' && (
         <Alert type="warning" showIcon title={t('全局规则应用于集群中的所有 HTTP 路由。')} />
       )}
-      {list.error || consumer.error || err ? (
+      {list.error || consumer.error ? (
         <RequestError
-          error={list.error || consumer.error || err}
+          error={list.error || consumer.error}
           retry={() => {
-            setErr(undefined);
             list.refetch();
           }}
         />
@@ -434,6 +487,24 @@ function ManagedList({ kind }: { kind: string }) {
         }
         columns={[
           { title: t('资源 ID'), dataIndex: 'id' },
+          ...(kind === 'services'
+            ? [
+                {
+                  title: t('服务名称'),
+                  render: (_: unknown, r: Resource) => (
+                    <div>
+                      <strong>{r.value.name || '—'}</strong>
+                      {r.value.desc && <div className="form-hint">{r.value.desc}</div>}
+                    </div>
+                  ),
+                },
+                {
+                  title: t('上游服务'),
+                  render: (_: unknown, r: Resource) =>
+                    r.value.upstream_id ?? (r.value.upstream ? t('内联上游') : t('由路由提供上游')),
+                },
+              ]
+            : []),
           {
             title: t('插件'),
             render: (_, r) => (
@@ -451,19 +522,28 @@ function ManagedList({ kind }: { kind: string }) {
                 <Button type="link" onClick={() => setImpact(r)}>
                   {t('查看配置与引用')}
                 </Button>
-                <Button disabled={!writable} onClick={() => setEdit(r)}>
+                <Button autoInsertSpace={false} disabled={!writable} onClick={() => setEdit(r)}>
                   {t('编辑')}
                 </Button>
-                <Popconfirm title={t('为此资源创建删除草稿？')} onConfirm={() => remove(r)}>
-                  <Button disabled={!writable} danger>
-                    {t('删除')}
-                  </Button>
-                </Popconfirm>
+                <Button
+                  autoInsertSpace={false}
+                  disabled={!writable}
+                  danger
+                  onClick={() => setRemoving(r)}
+                >
+                  {t('删除')}
+                </Button>
               </Space>
             ),
           },
         ]}
       />
+      {removing && (
+        <RouteActionDialog
+          action={{ type: 'delete', route: removing, kind }}
+          close={() => setRemoving(undefined)}
+        />
+      )}
       <Drawer
         title={t('查看配置与引用')}
         open={!!impact}
@@ -490,7 +570,7 @@ function ManagedList({ kind }: { kind: string }) {
         title={t(kindNames[kind]) + ' · ' + t('配置编辑')}
         onCancel={() => setEdit(undefined)}
         footer={null}
-        width={720}
+        width={kind === 'services' ? 920 : 720}
         destroyOnHidden
       >
         {edit && (
@@ -498,7 +578,7 @@ function ManagedList({ kind }: { kind: string }) {
             kind={kind}
             item={edit === 'new' ? undefined : edit}
             owner={owner}
-            onDone={() => go('/drafts')}
+            onDone={() => setEdit(undefined)}
           />
         )}
       </Modal>

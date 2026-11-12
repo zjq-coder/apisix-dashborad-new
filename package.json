@@ -2,7 +2,7 @@
   "name": "apisix-dashboard-next",
   "private": true,
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "workspaces": [
     "web"
   ],
@@ -16,6 +16,8 @@
     "test:routes": "node scripts/test-route-editor.mjs",
     "test:consumers": "node scripts/test-consumers.mjs",
     "test:consumer-plugins": "node scripts/test-consumer-plugins.mjs",
+    "test:plugin-routes": "node scripts/test-plugin-routes.mjs",
+    "test:plugin-nodes": "node scripts/test-optional-plugins.mjs",
     "format": "prettier --write web/src tests scripts --ignore-unknown",
     "format:check": "prettier --check web/src tests scripts --ignore-unknown",
     "seed": "node scripts/seed-sandbox.mjs",

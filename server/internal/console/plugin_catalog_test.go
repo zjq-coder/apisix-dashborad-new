@@ -160,3 +160,19 @@ func TestConsumerIdentityUniquenessAcrossAuthenticationMethods(t *testing.T) {
 		})
 	}
 }
+
+func TestPluginArrayDefaultsFromLua(t *testing.T) {
+	var schema Object
+	if err := json.Unmarshal([]byte(`{"type":"object","properties":{"headers":{"type":"array","default":{},"items":{"type":"string"}},"options":{"type":"object","default":{}}}}`), &schema); err != nil {
+		t.Fatal(err)
+	}
+	normalizePluginSchema(schema)
+	for _, config := range []Object{{}, {"headers": []string{"X-Order"}}} {
+		if err := validatePluginSchema(schema, config); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := validatePluginSchema(schema, Object{"headers": Object{}}); err == nil {
+		t.Fatal("an explicit object must still fail array validation")
+	}
+}

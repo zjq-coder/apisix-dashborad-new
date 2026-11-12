@@ -1,3 +1,5 @@
+import { DiffView } from '../components/DiffView';
+import { useConfigWrite } from '../useConfigWrite';
 import { languageFooter } from '../components/LanguageSwitch';
 import { useFeedback } from '../i18n/feedback';
 import { useTranslate } from '../i18n';
@@ -29,7 +31,7 @@ import {
   AimOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useBeforeUnload, useBlocker } from 'react-router-dom';
+import { useBeforeUnload, useBlocker, useSearchParams } from 'react-router-dom';
 import { api, post } from '../api';
 import { useConsole } from '../context';
 import { Checks, Loading, PageTitle, Panel, RequestError } from '../components/Common';
@@ -87,6 +89,7 @@ export function EditorForm({
   const t = useTranslate();
   const { cluster, clusterId, go, can } = useConsole();
   const client = useQueryClient();
+  const direct = useConfigWrite();
   const { message } = App.useApp();
   const action = draft?.action || (resource && !copying ? 'update' : 'create');
   const initial = cleanConfig(
@@ -121,7 +124,8 @@ export function EditorForm({
       (kind === 'consumers' && initial.username) ||
       `${kind === 'routes' ? 'route' : 'upstream'}-${crypto.randomUUID().slice(0, 8)}`,
   );
-  const [mode, setMode] = useState('form');
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState(params.get('mode') === 'json' ? 'json' : 'form');
   const [section, setSection] = useState<EditorSection>('match');
   const [target, setTarget] = useState(() => targetOf(initial, action === 'create' && !copying));
   const [bufferErrors, setBufferErrors] = useState<Record<string, string>>({});
@@ -204,6 +208,8 @@ export function EditorForm({
         section: 'match',
         message: t('JSON 中的 username 必须与当前消费者用户名一致'),
       });
+    if (kind === 'routes' && value.id !== undefined && String(value.id) !== id)
+      result.push({ path: 'id', section: 'match', message: t('JSON 中的 id 必须与资源 ID 一致') });
     if (rawError) result.push({ path: 'json', section: 'review', message: rawError });
     for (const [path, error] of Object.entries(bufferErrors))
       result.push({ path, message: error, section: path.split('.')[0] as EditorSection });
@@ -227,7 +233,7 @@ export function EditorForm({
     return JSON.parse(raw) as JsonObject;
   };
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (asDraft: boolean) => {
       const candidate = assertValid();
       const body = {
         cluster_id: clusterId,
@@ -239,11 +245,19 @@ export function EditorForm({
         revision: draft?.revision,
         value: candidate,
       };
+      if (!asDraft)
+        return direct.write({ ...body, draft_id: draft?.id }, 'config', () => {
+          allowLeave.current = true;
+        });
       return draft
         ? api<Draft>(`/drafts/${draft.id}`, { method: 'PUT', body: JSON.stringify(body) })
         : post<Draft>('/drafts', body);
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, asDraft) => {
+      if (!asDraft) {
+        if (result.status === 'succeeded') go('/' + kind);
+        return;
+      }
       allowLeave.current = true;
       await client.invalidateQueries({ queryKey: ['drafts'] });
       client.removeQueries({ queryKey: ['draft', draft?.id] });
@@ -259,6 +273,7 @@ export function EditorForm({
         resource_type: kind,
         resource_id: id,
         draft_id: draft?.id,
+        include_diff: true,
         value: assertValid(),
       });
       return { result, signature };
@@ -406,7 +421,7 @@ export function EditorForm({
           <>
             <ToggleSetting
               label={t('启用路由')}
-              description={t('停用状态也先保存为草稿，发布后生效。')}
+              description={t('停用后，网关将停止匹配这条路由。')}
               value={value.status !== 0}
               onChange={(next) => field('status', next ? 1 : 0)}
               disabled={readOnly}
@@ -649,7 +664,12 @@ export function EditorForm({
             }
           />
         </div>
-        {validation?.signature === configVersion.current && <Checks checks={validation.checks} />}
+        {validation?.signature === configVersion.current && (
+          <>
+            <Checks checks={validation.checks} />
+            {validation.preview && <DiffView {...validation.preview} />}
+          </>
+        )}
       </Panel>
       <Panel title={t('完整配置')} className="preview-panel">
         <ConfigPreview value={previewRaw} />
@@ -729,7 +749,7 @@ export function EditorForm({
       <PageTitle
         title={t((action === 'create' ? '新建' : readOnly ? '查看' : '编辑') + kindNames[kind])}
         description={t(
-          '{0} · 保存草稿，审查差异后发布。',
+          '{0} · 保存时校验配置，发布结果可在变更记录中查看。',
           value.name ||
             value.username ||
             (kind === 'upstreams'
@@ -748,13 +768,20 @@ export function EditorForm({
                     : t('配置编辑')}
             </Tag>
             <Button
+              type="text"
+              disabled={readOnly || save.isPending}
+              onClick={() => save.mutate(true)}
+            >
+              {t('保存草稿')}
+            </Button>
+            <Button
               type="primary"
               icon={<SaveOutlined aria-hidden="true" />}
               loading={save.isPending}
-              disabled={readOnly}
-              onClick={() => save.mutate()}
+              disabled={!direct.ready || readOnly}
+              onClick={() => save.mutate(false)}
             >
-              {t('保存草稿')}
+              {direct.label}
             </Button>
           </>
         }
@@ -779,6 +806,18 @@ export function EditorForm({
           </div>
           {mode === 'json' ? (
             <Panel>
+              {kind === 'routes' && action === 'create' && !draft && (
+                <Form layout="vertical" className="form-panel">
+                  <Form.Item label={t('资源 ID')} required>
+                    <Input
+                      aria-label={t('资源 ID')}
+                      value={id}
+                      disabled={readOnly}
+                      onChange={(e) => setId(e.target.value)}
+                    />
+                  </Form.Item>
+                </Form>
+              )}
               <Suspense fallback={<Loading />}>
                 <CodeEditor
                   value={raw}
@@ -852,6 +891,7 @@ export function EditorForm({
             </div>
           </Panel>
           <Panel title={t('保存与发布')}>
+            {direct.confirmationField}
             <div className="editor-guidance">
               <div>
                 <span>01</span>
@@ -859,14 +899,10 @@ export function EditorForm({
               </div>
               <div>
                 <span>02</span>
-                <p>{t('保存草稿，核对变更差异')}</p>
-              </div>
-              <div>
-                <span>03</span>
                 <p>{t('发布前校验与冲突检查')}</p>
               </div>
               <div>
-                <span>04</span>
+                <span>03</span>
                 <p>{t('发布后回读确认，支持回退')}</p>
               </div>
               <Button
@@ -898,10 +934,10 @@ export function EditorForm({
             type="primary"
             icon={<SaveOutlined aria-hidden="true" />}
             loading={save.isPending}
-            disabled={readOnly}
-            onClick={() => save.mutate()}
+            disabled={!direct.ready || readOnly}
+            onClick={() => save.mutate(false)}
           >
-            {t('保存草稿')}
+            {direct.label}
           </Button>
         </Space>
       </div>

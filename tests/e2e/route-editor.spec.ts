@@ -487,7 +487,7 @@ test('重定向方式互斥切换、双向插件同步与响应式布局', async
     await choose(page, 'http_to_https', '停用 false');
     await page.getByRole('dialog').getByLabel('uri', { exact: true }).fill('/conflicting');
     // This intermediate plugin config is intentionally invalid and must not be applied.
-    await page.getByRole('button', { name: '应用到路由草稿', exact: true }).click();
+    await page.getByRole('button', { name: '应用到路由', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
     await page
       .getByRole('dialog')
@@ -541,7 +541,7 @@ test('动态插件表单编辑嵌套对象数组、布尔值和执行选项', as
       fullPage: true,
       animations: 'disabled',
     });
-    await page.getByRole('button', { name: '应用到路由草稿', exact: true }).click();
+    await page.getByRole('button', { name: '应用到路由', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const rewrite = (await config(page)).plugins['response-rewrite'];
     expect(rewrite).toMatchObject({
@@ -553,7 +553,7 @@ test('动态插件表单编辑嵌套对象数组、布尔值和执行选项', as
     await page.getByPlaceholder('搜索插件名称或用途').fill('request-id');
     await page.locator('.plugin-picker button').filter({ hasText: 'request-id' }).click();
     await choose(page, 'include_in_response', '停用 false');
-    await page.getByRole('button', { name: '应用到路由草稿', exact: true }).click();
+    await page.getByRole('button', { name: '应用到路由', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect((await config(page)).plugins['request-id'].include_in_response).toBe(false);
     await save(page);

@@ -1,9 +1,6 @@
-import { messageText } from '../i18n/Message';
-import { languageFooter } from '../components/LanguageSwitch';
-import { useFeedback } from '../i18n/feedback';
 import { useTranslate, type Translate } from '../i18n';
 import { useMemo, useState } from 'react';
-import { Alert, App, Button, Dropdown, Input, Select, Space, Table, Tag, Tooltip } from 'antd';
+import { Alert, Button, Dropdown, Grid, Input, Select, Space, Table, Tag, Tooltip } from 'antd';
 import {
   ApartmentOutlined,
   CopyOutlined,
@@ -17,14 +14,20 @@ import {
   ApiOutlined,
   UserOutlined,
   KeyOutlined,
+  EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { type PluginDefinition } from '../plugins';
-import { api, post } from '../api';
+import { api } from '../api';
 import { useConsole } from '../context';
 import { Blank, NoCluster, PageTitle, Panel, RequestError } from '../components/Common';
 import { kindNames, type Draft, type Resource, type ResourceKind } from '../types';
+import { RouteActionDialog, type RouteAction } from './RouteActions';
+import { RouteTools } from './RouteTools';
 
 function nodesLabel(value: Resource['value'], t: Translate) {
   if (Array.isArray(value.nodes)) return t('{0} 个节点', value.nodes.length);
@@ -34,15 +37,15 @@ function nodesLabel(value: Resource['value'], t: Translate) {
   return t('未配置节点');
 }
 export function Resources({ kind }: { kind: ResourceKind }) {
-  const feedback = useFeedback();
   const t = useTranslate();
+  const narrowActions = !Grid.useBreakpoint().md;
   const [params, setParams] = useSearchParams();
   const pluginFilter = kind === 'consumers' ? params.get('plugin') || '' : '';
   const { cluster, clusterId, go, can } = useConsole();
-  const client = useQueryClient();
-  const { message, modal } = App.useApp();
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
+  const [routeAction, setRouteAction] = useState<RouteAction>();
+  const [selectedIds, setSelectedIds] = useState<React.Key[]>([]);
   const [compact, setCompact] = useState(localStorage.getItem('console.density') === 'compact');
   const resources = useQuery({
     queryKey: ['resources', clusterId, kind],
@@ -94,43 +97,20 @@ export function Resources({ kind }: { kind: ResourceKind }) {
     [resources.data, query, status, pluginFilter],
   );
   if (!cluster) return <NoCluster />;
+  const writable = !cluster.read_only && can('edit');
+  const selected = visible.filter((r) => selectedIds.includes(r.id));
   const edit = (resource: Resource) => {
     const existing = activeDrafts.find((d) => d.resource_id === resource.id);
+    if (kind === 'routes' && !writable) return setRouteAction({ type: 'view', route: resource });
+    if (existing?.action === 'delete') return go('/drafts?preview=' + existing.id);
     go(existing ? `/drafts/${existing.id}/edit` : `/${kind}/${resource.id}/edit`);
   };
-  const remove = (resource: Resource) =>
-    modal.confirm({
-      footer: languageFooter,
-      title: messageText('将“{0}”加入删除草稿？', resource.value.name || resource.id),
-      content: messageText('此操作先保存草稿。提交发布前，会检查资源引用关系与最新配置。'),
-      okText: messageText('创建删除草稿'),
-      cancelText: messageText('取消'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await post('/drafts', {
-            cluster_id: clusterId,
-            resource_type: kind,
-            resource_id: resource.id,
-            action: 'delete',
-            title: t('删除 {0}', resource.value.name || resource.id).slice(0, 60),
-            base_hash: resource.hash,
-            value: null,
-          });
-          await client.invalidateQueries({ queryKey: ['drafts'] });
-          message.success(t('删除草稿已保存'));
-          go('/drafts');
-        } catch (err) {
-          message.error(feedback((err as Error).message));
-          throw err;
-        }
-      },
-    });
+  const remove = (resource: Resource) => setRouteAction({ type: 'delete', route: resource, kind });
   const columns = [
     {
       title: t('{0}名称', t(kindNames[kind])),
       key: 'name',
-      width: kind === 'routes' ? 245 : 280,
+      width: kind === 'routes' ? 205 : 280,
       sorter: (a: Resource, b: Resource) =>
         String(a.value.name || a.id).localeCompare(String(b.value.name || b.id)),
       render: (_: unknown, r: Resource) => (
@@ -163,7 +143,7 @@ export function Resources({ kind }: { kind: ResourceKind }) {
           {
             title: t('请求匹配'),
             key: 'match',
-            width: 245,
+            width: 210,
             render: (_: unknown, r: Resource) => (
               <div>
                 <div className="mono resource-uri">
@@ -191,7 +171,7 @@ export function Resources({ kind }: { kind: ResourceKind }) {
           {
             title: t('转发目标'),
             key: 'upstream',
-            width: 180,
+            width: 155,
             render: (_: unknown, r: Resource) => (
               <div className="upstream-cell">
                 <ApartmentOutlined aria-hidden="true" />
@@ -227,7 +207,7 @@ export function Resources({ kind }: { kind: ResourceKind }) {
           {
             title: t('插件'),
             key: 'plugins',
-            width: 190,
+            width: 150,
             render: (_: unknown, r: Resource) => {
               const names = Object.keys(r.value.plugins || {});
               return (
@@ -248,7 +228,7 @@ export function Resources({ kind }: { kind: ResourceKind }) {
           {
             title: t('状态'),
             key: 'status',
-            width: 100,
+            width: 90,
             render: (_: unknown, r: Resource) => (
               <span className={`resource-state ${r.value.status === 0 ? 'disabled' : 'enabled'}`}>
                 <i aria-hidden="true" />
@@ -359,44 +339,130 @@ export function Resources({ kind }: { kind: ResourceKind }) {
     {
       title: t('操作'),
       key: 'actions',
-      width: 100,
+      width: kind === 'routes' ? (narrowActions ? 154 : 300) : 100,
       fixed: 'right' as const,
-      render: (_: unknown, r: Resource) => (
-        <Space size={2}>
-          <Button type="link" size="small" onClick={() => edit(r)}>
-            {cluster.read_only || !can('edit') ? t('查看') : t('编辑')}
-          </Button>
-          <Dropdown
-            trigger={['click']}
-            menu={{
-              items: [
-                {
-                  key: 'copy',
-                  label: t('复制为新配置'),
-                  icon: <CopyOutlined aria-hidden="true" />,
-                  disabled: cluster.read_only || !can('edit') || kind === 'consumers',
-                  onClick: () => go(`/${kind}/new?copy=${r.id}`),
-                },
-                {
-                  key: 'delete',
-                  label: t('创建删除草稿'),
-                  danger: true,
-                  disabled: cluster.read_only || !can('edit'),
-                  icon: <DeleteOutlined aria-hidden="true" />,
-                  onClick: () => remove(r),
-                },
-              ],
-            }}
-          >
-            <Button
-              type="text"
-              size="small"
-              icon={<MoreOutlined aria-hidden="true" />}
-              aria-label={t('更多操作 {0}', r.value.name || r.id)}
-            />
-          </Dropdown>
-        </Space>
-      ),
+      render: (_: unknown, r: Resource) => {
+        if (kind === 'routes') {
+          const draft = activeDrafts.find((d) => d.resource_id === r.id);
+          const statusLabel = draft ? t('查看草稿') : r.value.status === 0 ? t('发布') : t('下线');
+          return (
+            <Space size={4} className="route-row-actions">
+              <Button
+                autoInsertSpace={false}
+                aria-label={statusLabel}
+                title={statusLabel}
+                className={
+                  draft ? undefined : r.value.status === 0 ? 'route-enable' : 'route-disable'
+                }
+                icon={
+                  draft ? (
+                    <FileTextOutlined aria-hidden="true" />
+                  ) : r.value.status === 0 ? (
+                    <PlayCircleOutlined aria-hidden="true" />
+                  ) : (
+                    <PauseCircleOutlined aria-hidden="true" />
+                  )
+                }
+                size="small"
+                disabled={!draft && !writable}
+                onClick={() =>
+                  draft
+                    ? go('/drafts?preview=' + draft.id)
+                    : setRouteAction({ type: 'status', route: r })
+                }
+              >
+                {!narrowActions && statusLabel}
+              </Button>
+              <Button
+                autoInsertSpace={false}
+                aria-label={t('配置')}
+                title={t('配置')}
+                color="primary"
+                variant="outlined"
+                icon={<EditOutlined aria-hidden="true" />}
+                size="small"
+                disabled={!writable || draft?.action === 'delete'}
+                onClick={() => edit(r)}
+              >
+                {!narrowActions && t('配置')}
+              </Button>
+              <Tooltip title={t('查看配置')}>
+                <Button
+                  size="small"
+                  icon={<EyeOutlined aria-hidden="true" />}
+                  aria-label={t('查看配置 {0}', r.value.name || r.id)}
+                  onClick={() => setRouteAction({ type: 'view', route: r })}
+                />
+              </Tooltip>
+              <Dropdown
+                trigger={['click']}
+                menu={{
+                  items: [
+                    {
+                      key: 'copy',
+                      label: t('复制'),
+                      icon: <CopyOutlined aria-hidden="true" />,
+                      disabled: !writable,
+                      onClick: () => go('/routes/new?copy=' + encodeURIComponent(r.id)),
+                    },
+                    {
+                      key: 'delete',
+                      label: t('删除'),
+                      icon: <DeleteOutlined aria-hidden="true" />,
+                      disabled: !writable || !!draft,
+                      danger: true,
+                      onClick: () => setRouteAction({ type: 'delete', route: r }),
+                    },
+                  ],
+                }}
+              >
+                <Button
+                  size="small"
+                  icon={<MoreOutlined aria-hidden="true" />}
+                  title={t('更多')}
+                  aria-label={t('更多操作 {0}', r.value.name || r.id)}
+                />
+              </Dropdown>
+            </Space>
+          );
+        }
+        return (
+          <Space size={2}>
+            <Button type="link" size="small" onClick={() => edit(r)}>
+              {cluster.read_only || !can('edit') ? t('查看') : t('编辑')}
+            </Button>
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                items: [
+                  {
+                    key: 'copy',
+                    label: t('复制为新配置'),
+                    icon: <CopyOutlined aria-hidden="true" />,
+                    disabled: cluster.read_only || !can('edit') || kind === 'consumers',
+                    onClick: () => go(`/${kind}/new?copy=${r.id}`),
+                  },
+                  {
+                    key: 'delete',
+                    label: t('删除'),
+                    danger: true,
+                    disabled: cluster.read_only || !can('edit'),
+                    icon: <DeleteOutlined aria-hidden="true" />,
+                    onClick: () => remove(r),
+                  },
+                ],
+              }}
+            >
+              <Button
+                type="text"
+                size="small"
+                icon={<MoreOutlined aria-hidden="true" />}
+                aria-label={t('更多操作 {0}', r.value.name || r.id)}
+              />
+            </Dropdown>
+          </Space>
+        );
+      },
     },
   ];
   return (
@@ -496,14 +562,20 @@ export function Resources({ kind }: { kind: ResourceKind }) {
               }
               allowClear
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSelectedIds([]);
+              }}
               className="resource-search"
             />
             {kind === 'routes' && (
               <Select
                 aria-label={t('筛选路由状态')}
                 value={status}
-                onChange={setStatus}
+                onChange={(value) => {
+                  setStatus(value);
+                  setSelectedIds([]);
+                }}
                 options={[
                   { value: 'all', label: t('全部状态') },
                   { value: 'active', label: t('已启用') },
@@ -512,6 +584,7 @@ export function Resources({ kind }: { kind: ResourceKind }) {
               />
             )}
             <div className="toolbar-spacer" />
+            {kind === 'routes' && <RouteTools selected={selected} />}
             <Button
               type="text"
               icon={<SwapOutlined aria-hidden="true" rotate={90} />}
@@ -527,13 +600,24 @@ export function Resources({ kind }: { kind: ResourceKind }) {
             className="resource-table"
             rowClassName={(resource) => (resource.value.status === 0 ? 'resource-disabled' : '')}
             rowKey="id"
+            rowSelection={
+              kind === 'routes'
+                ? {
+                    selectedRowKeys: selected.map((r) => r.id),
+                    onChange: setSelectedIds,
+                    getCheckboxProps: (r) => ({
+                      'aria-label': t('选择路由 {0}', r.value.name || r.id),
+                    }),
+                  }
+                : undefined
+            }
             columns={columns}
             dataSource={visible}
             loading={resources.isLoading}
             size={compact ? 'small' : 'middle'}
-            scroll={{ x: kind === 'routes' ? 1100 : 800 }}
+            scroll={{ x: kind === 'routes' ? 1080 : 800 }}
             pagination={{
-              pageSize: 15,
+              defaultPageSize: 15,
               showSizeChanger: true,
               pageSizeOptions: [15, 30, 50],
               showTotal: (total) => t('共 {0} 条配置', total),
@@ -554,9 +638,12 @@ export function Resources({ kind }: { kind: ResourceKind }) {
           />
         </Panel>
       )}
+      {routeAction && (
+        <RouteActionDialog action={routeAction} close={() => setRouteAction(undefined)} />
+      )}
       <div className="page-footnote">
         <EditOutlined aria-hidden="true" />
-        <span>{t('所有配置编辑先保存为草稿。发布前可以检查差异、引用关系与配置冲突。')}</span>
+        <span>{t('保存并发布后可在发布记录中查看差异、执行结果或回退。')}</span>
       </div>
     </>
   );

@@ -18,7 +18,10 @@ services:
       retries: 20
     restart: unless-stopped
   apisix-staging:
-    image: ${APISIX_IMAGE:-apache/apisix:3.19.0-debian}
+    build:
+      context: ./deploy/apisix/healthcheck
+      args:
+        APISIX_IMAGE: ${APISIX_IMAGE:-apache/apisix:3.19.0-debian}
     env_file: .local/staging.env
     ports: ["127.0.0.1:29080:9080"]
     volumes:

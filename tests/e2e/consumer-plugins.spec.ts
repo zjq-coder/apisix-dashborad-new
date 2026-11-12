@@ -33,7 +33,7 @@ async function open(page: Page, path: string) {
   await page.goto(`${path}${path.includes('?') ? '&' : '?'}cluster=${cluster.id}`);
 }
 async function fields(page: Page, values: any) {
-  const dialog = page.getByRole('dialog');
+  const dialog = page.locator('.plugin-config-dialog');
   for (const [name, value] of Object.entries(values)) {
     // HMAC's signed_headers defaults to [date]; leave that default intact.
     if (Array.isArray(value)) continue;
@@ -89,8 +89,8 @@ for (const name of names)
         ).toBeVisible();
         await fields(page, { algorithm: 'HS256' });
       }
-      await page.getByRole('button', { name: '应用到消费者草稿' }).click();
-      await expect(page.getByRole('dialog')).not.toBeVisible();
+      await page.getByRole('button', { name: '应用到消费者' }).click();
+      await expect(page.locator('.plugin-config-dialog:visible')).toHaveCount(0);
       await page.getByLabel('消费者用户名', { exact: true }).fill(id);
       await release(page);
       expect(
@@ -114,8 +114,8 @@ for (const name of names)
         page.getByRole('dialog').getByRole('link', { name: '创建认证凭据' }),
       ).toHaveAttribute('href', `/consumers/new?cluster=${cluster.id}&plugin=${name}`);
       await fields(page, fixture.routes[name]);
-      await page.getByRole('button', { name: '应用到路由草稿' }).click();
-      await expect(page.getByRole('dialog')).not.toBeVisible();
+      await page.getByRole('button', { name: '应用到路由' }).click();
+      await expect(page.locator('.plugin-config-dialog:visible')).toHaveCount(0);
       await release(page);
       for (const [headers, expected] of [
         [{}, name === 'jwe-decrypt' ? 403 : 401],
@@ -166,7 +166,7 @@ for (const name of names)
         await dialog.getByText('JSON', { exact: true }).click();
         await dialog.getByText('配置表单', { exact: true }).click();
         await dialog.getByLabel(field, { exact: true }).fill('');
-        await page.getByRole('button', { name: '应用到消费者草稿' }).click();
+        await page.getByRole('button', { name: '应用到消费者' }).click();
         await expect(page.getByRole('dialog')).not.toBeVisible();
       }
       expect(errors).toEqual([]);

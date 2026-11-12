@@ -103,8 +103,8 @@ test('上游、路由、插件、草稿差异、发布与回退完整闭环', as
     await page.locator('.plugin-picker button').filter({ hasText: 'limit-req' }).click();
     await page.getByRole('spinbutton', { name: 'rate', exact: true }).fill('40');
     await page.getByRole('spinbutton', { name: 'burst', exact: true }).fill('10');
-    await page.getByRole('button', { name: '应用到路由草稿', exact: true }).click();
-    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await page.getByRole('button', { name: '应用到路由', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '编辑插件 limit-req' })).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({

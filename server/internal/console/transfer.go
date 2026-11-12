@@ -207,7 +207,8 @@ func (s *Server) transfer(w http.ResponseWriter, r *http.Request) {
 		dbError(w, err)
 		return
 	}
-	staging := r.PathValue("step") == "stage"
+	step := r.PathValue("step")
+	staging := step == "stage" || step == "apply" || step == "submit"
 	if !staging && r.PathValue("step") != "preview" {
 		fail(w, 404, "接口不存在")
 		return
@@ -317,7 +318,7 @@ func (s *Server) transfer(w http.ResponseWriter, r *http.Request) {
 					fail(w, 422, dst.String()+" · "+err.Error())
 					return
 				}
-				drafts = append(drafts, Draft{ID: newID(), ClusterID: c.ID, ResourceType: dst.Kind, ResourceID: dst.ID, Title: dst.ID, CreatedBy: actor(r), Action: row.Action, Before: before, After: v, BaseHash: hash(before), SensitivePaths: paths})
+				drafts = append(drafts, Draft{ClusterID: c.ID, ResourceType: dst.Kind, ResourceID: dst.ID, Title: dst.ID, CreatedBy: actor(r), Action: row.Action, Before: before, After: v, BaseHash: hash(before), SensitivePaths: paths})
 				ops = append(ops, Operation{ResourceType: dst.Kind, ResourceID: dst.ID, After: v, Action: row.Action})
 			}
 		}
@@ -347,6 +348,15 @@ func (s *Server) transfer(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, "请重新预览并处理目标差异")
 		return
 	}
+	if step != "stage" {
+		s.submitConfig(w, r, c, drafts, step)
+		return
+	}
+	s.saveDraftBatch(w, r, c.ID, drafts)
+}
+
+func (s *Server) saveDraftBatch(w http.ResponseWriter, r *http.Request, clusterID string, drafts []Draft) {
+	ctx := r.Context()
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
 	if err != nil {
 		dbError(w, err)
@@ -355,6 +365,7 @@ func (s *Server) transfer(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	ids := []string{}
 	for _, d := range drafts {
+		d.ID = newID()
 		if err = s.Store.insertDraft(ctx, tx, d); err != nil {
 			var pg *pgconn.PgError
 			if errors.As(err, &pg) && pg.Code == "23505" {
@@ -370,6 +381,6 @@ func (s *Server) transfer(w http.ResponseWriter, r *http.Request) {
 		dbError(w, err)
 		return
 	}
-	markAudit(r, c.ID, "", strconv.Itoa(len(ids)))
+	markAudit(r, clusterID, "", strconv.Itoa(len(ids)))
 	reply(w, 201, Object{"draft_ids": ids})
 }

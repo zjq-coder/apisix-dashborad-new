@@ -227,7 +227,7 @@ func (s *Server) saveAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for id, perms := range in.Grants {
-		result, e := tx.ExecContext(ctx, "INSERT INTO console_grants(username,cluster_id,permissions) SELECT $1,id,$3::text[] FROM clusters WHERE id=$2", name, id, perms)
+		result, e := tx.ExecContext(ctx, "INSERT INTO console_grants(username,cluster_id,permissions) SELECT $1,id,$3::text[] FROM clusters WHERE id=$2 AND removed_at IS NULL FOR SHARE", name, id, perms)
 		if e != nil {
 			dbError(w, e)
 			return
