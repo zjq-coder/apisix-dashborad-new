@@ -7,6 +7,7 @@ export interface PluginDefinition {
   scope: string;
   consumer_configurable: boolean;
   consumer_source: 'dedicated' | 'shared' | 'none';
+  can_scope_credential: boolean;
   consumer_secret_fields: string[];
   route_secret_fields: string[];
 }

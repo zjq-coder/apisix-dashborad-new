@@ -35,6 +35,11 @@ func TestCatalogDiscoversConsumerSchemasAndLegacySharedSchema(t *testing.T) {
 	if pluginDefinition("wolf-rbac", metadata["wolf-rbac"]).ConsumerSource != "shared" {
 		t.Fatal("legacy shared schema lost")
 	}
+	if !pluginDefinition("basic-auth", metadata["custom-auth"]).CanScopeCredential || custom.CanScopeCredential ||
+		pluginDefinition("jwe-decrypt", metadata["custom-auth"]).CanScopeCredential ||
+		pluginDefinition("multi-auth", metadata["multi-auth"]).CanScopeCredential {
+		t.Fatal("consumer binding must be distinguished from decryption and route-only authentication")
+	}
 }
 
 func TestConsumerSchemaFallbackOnlyForUnsupportedContext(t *testing.T) {

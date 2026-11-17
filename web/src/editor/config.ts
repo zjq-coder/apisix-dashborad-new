@@ -421,6 +421,9 @@ export function validateConfig(kind: ResourceKind | 'services', value: JsonObjec
     if (!/^[a-zA-Z0-9_-]{1,256}$/.test(value.username || ''))
       add('username', '消费者用户名须为 1–256 位字母、数字、下划线或短横线');
     const credential = value.plugins?.['key-auth'];
+    const scope = value.plugins?.['consumer-restriction'];
+    if (scope && Array.isArray(scope.whitelist) && !scope.whitelist.length)
+      add('plugins.consumer-restriction.whitelist', '请选择允许访问的路由或服务', 'plugins');
     if (credential && (typeof credential.key !== 'string' || !credential.key.trim()))
       add('plugins.key-auth.key', '请填写或生成 API Key', 'plugins');
     for (const [name, config] of Object.entries(value.plugins || {})) {

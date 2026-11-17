@@ -389,6 +389,7 @@ const auditActions = [
   'cluster.probe',
   'config.save',
   'config.batch-delete',
+  'consumer.scope-credential',
   'bundle.transfer',
   'draft.save',
   'draft.discard',
@@ -524,7 +525,9 @@ export function Audit() {
                   /^[a-f0-9]{32}$/.test(v) &&
                   v !== r.cluster_id &&
                   r.cluster_id &&
-                  (r.action.startsWith('draft.') || r.action.startsWith('change.')) ? (
+                  (r.action.startsWith('draft.') ||
+                    r.action.startsWith('change.') ||
+                    r.action === 'consumer.scope-credential') ? (
                     <Button
                       type="link"
                       className="audit-target"

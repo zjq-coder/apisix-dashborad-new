@@ -19,6 +19,7 @@ import {
   Spin,
   Switch,
   Tag,
+  Tooltip,
 } from 'antd';
 import {
   BlockOutlined,
@@ -27,6 +28,7 @@ import {
   ExportOutlined,
   PlusOutlined,
   SearchOutlined,
+  SafetyOutlined,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { api, post } from '../api';
@@ -125,6 +127,8 @@ export function PluginManager({
   draftId,
   scope = 'route',
   resourceType,
+  onScopeCredential,
+  scopeDirty = false,
 }: {
   value: JsonObject;
   onChange: (plugins: JsonObject) => void;
@@ -133,6 +137,8 @@ export function PluginManager({
   draftId?: string;
   scope?: 'route' | 'consumer';
   resourceType?: string;
+  onScopeCredential?: (plugin: string) => void;
+  scopeDirty?: boolean;
 }) {
   const feedback = useFeedback();
   const t = useTranslate();
@@ -182,6 +188,18 @@ export function PluginManager({
   const guide = pluginGuide(editing, locale);
   const isCredential = (name: string) =>
     plugins.data?.some((item) => item.name === name && item.consumer_source !== 'none');
+  const ldapWithoutConsumer =
+    editing === 'ldap-auth-advanced' && !consumer && draft.consumer_required === false;
+  const newCredential = new URLSearchParams({ cluster: clusterId, plugin: editing });
+  const generalCredentialLink = '/consumers/new?' + newCredential;
+  if (
+    resourceId &&
+    (!resourceType || resourceType === 'services') &&
+    plugins.data?.some((item) => item.name === 'consumer-restriction')
+  ) {
+    newCredential.set('scope', resourceType === 'services' ? 'service_id' : 'route_id');
+    newCredential.set('target', resourceId);
+  }
   const descriptionOf = (name: string) =>
     (consumer ? authenticationInfo[name]?.consumer : authenticationInfo[name]?.route) ||
     consumerPolicyHints[name] ||
@@ -348,7 +366,31 @@ export function PluginManager({
                 <p>{t(descriptionOf(name))}</p>
               </div>
               {consumer && isCredential(name) ? (
-                <Tag color="blue">{t('认证凭据')}</Tag>
+                <Space wrap>
+                  <Tag color="blue">{name === 'jwe-decrypt' ? t('解密密钥') : t('认证凭据')}</Tag>
+                  {onScopeCredential &&
+                    plugins.data?.some(
+                      (item) => item.name === name && item.can_scope_credential,
+                    ) && (
+                      <Tooltip
+                        title={
+                          scopeDirty
+                            ? t('请先处理当前未保存的修改')
+                            : t('沿用此凭据，为这一种认证方式选择路由或服务')
+                        }
+                      >
+                        <Button
+                          size="small"
+                          icon={<SafetyOutlined />}
+                          disabled={readOnly || scopeDirty}
+                          aria-label={t('单独授权 {0}', name)}
+                          onClick={() => onScopeCredential(name)}
+                        >
+                          {t('单独授权')}
+                        </Button>
+                      </Tooltip>
+                    )}
+                </Space>
               ) : (
                 <Switch
                   size="small"
@@ -505,6 +547,32 @@ export function PluginManager({
             description={
               <div>
                 <p>{t(descriptionOf(editing))}</p>
+                {editing === 'jwe-decrypt' && (
+                  <p>
+                    {t(
+                      'JWE 只读取密钥解密。需要限制接口访问时，请同时启用身份认证，并对认证得到的消费者授权。',
+                    )}
+                  </p>
+                )}
+                {ldapWithoutConsumer && (
+                  <p>
+                    {t(
+                      'consumer_required 已关闭，目录认证成功后会跳过消费者绑定。需要按消费者授权时请开启。',
+                    )}
+                  </p>
+                )}
+                {isCredential(editing) &&
+                  !definition?.can_scope_credential &&
+                  editing !== 'jwe-decrypt' && (
+                    <p>
+                      {t(
+                        '扩展插件须在认证阶段绑定消费者，消费者白名单才能生效。请用已授权和未授权目标核对插件行为。',
+                      )}
+                    </p>
+                  )}
+                {!consumer && definition?.can_scope_credential && !ldapWithoutConsumer && (
+                  <p>{t('如需限制此凭据可访问的路由或服务，请在消费者中设置「认证访问范围」。')}</p>
+                )}
                 {!consumer && (
                   <Space wrap>
                     <Button
@@ -516,13 +584,24 @@ export function PluginManager({
                     </Button>
                     {isCredential(editing) && (
                       <Button
-                        href={`/consumers/new?cluster=${encodeURIComponent(clusterId)}&plugin=${encodeURIComponent(editing)}`}
+                        href={generalCredentialLink}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
                         {t('创建认证凭据 ↗')}
                       </Button>
                     )}
+                    {definition?.can_scope_credential &&
+                      !ldapWithoutConsumer &&
+                      newCredential.has('target') && (
+                        <Button
+                          href={'/consumers/new?' + newCredential}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {t('创建限定当前资源的凭据 ↗')}
+                        </Button>
+                      )}
                   </Space>
                 )}
                 {authenticationInfo[editing]?.request && (

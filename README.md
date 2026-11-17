@@ -2,9 +2,9 @@
 
 面向 Apache APISIX 3.x 的独立配置控制台。运维人员可以在开发、预发和生产集群之间切换，直接发布路由、上游、插件和其他网关配置，并按发布记录回退。Dashboard 通过 Admin API 管理配置，业务流量直接经过 APISIX，数据面无需安装采集插件。
 
-**V1.0.1** · 简体中文 / English · 浅色 / 深色主题 · React + TypeScript / Go / PostgreSQL
+**V1.0.2** · 简体中文 / English · 浅色 / 深色主题 · React + TypeScript / Go / PostgreSQL
 
-从 V1.0.0 升级后，可直接发布配置或交给发布人，在路由列表批量操作，按字段查找插件说明，并查看各集群的 Admin API 连通状态。服务编辑器支持搜索上游和配置主被动健康检查。[V1.0.1 完整版本说明与升级步骤](docs/releases/V1.0.1.md) · [GitHub Release](https://github.com/zjq-coder/apisix-dashborad-new/releases/tag/V1.0.1)
+V1.0.2 支持把消费者凭据的访问权限限定到指定路由或服务。同一消费者同时使用 API Key 和 Basic 时，也可以只限制其中一种认证，并按发布记录回退。[V1.0.2 版本说明与升级步骤](docs/releases/V1.0.2.md) · [GitHub Release](https://github.com/zjq-coder/apisix-dashborad-new/releases/tag/V1.0.2)
 
 配套演示网关为 APISIX 3.19.0，路由编辑另有 3.14.1 的验收记录。各集群的可用资源和插件字段以该版本返回的 Schema 为准。
 
@@ -20,10 +20,10 @@
 
 需要 Docker Engine 或 Docker Desktop，以及 Docker Compose v2。Dashboard 镜像在构建时编译 Go 服务和前端，最终由同一容器提供网页与 API。仅在运行示例数据或前端开发脚本时需要主机安装 Node.js 24+。
 
-### 1. 获取 V1.0.1 并初始化
+### 1. 获取 V1.0.2 并初始化
 
 ~~~sh
-git clone --branch V1.0.1 https://github.com/zjq-coder/apisix-dashborad-new.git
+git clone --branch V1.0.2 https://github.com/zjq-coder/apisix-dashborad-new.git
 cd apisix-dashborad-new
 ~~~
 
@@ -79,7 +79,8 @@ node scripts/seed-staging.mjs
 
 ### 升级、持久化与生产接入
 
-- **升级与停止**。更新到选定版本后，再运行部署时的 `docker compose up -d --build`；带演示网关时加上 `--profile gateway`。停止并保留数据使用 `docker compose --profile gateway stop`。从早期流量图版本升级的环境可查阅[迁移说明](docs/operations-guide.md#从带流量图的版本升级)。
+- **从 V1.0.1 升级**。保留原部署目录的 `.env` 和数据卷，切换到 `V1.0.2` 标签。已有数据库运行时，执行 `docker compose up -d --no-deps --build dashboard` 即可更新控制台。访问范围由运维人员选择并发布后生效。[升级步骤](docs/releases/V1.0.2.md#从-v101-升级)
+- **停止与早期版本迁移**。停止演示环境并保留数据使用 `docker compose --profile gateway stop`。从早期流量图版本升级的环境可查阅[迁移说明](docs/operations-guide.md#从带流量图的版本升级)。
 - **数据库与密钥**。PostgreSQL 16 的命名卷 `dashboard-db` 保存账号、集群连接、草稿、发布和审计。备份 PostgreSQL 时同步保管 `DASHBOARD_ENCRYPTION_KEY`，恢复时使用原密钥解密已有记录。APISIX 自身的配置随网关 etcd 单独备份。
 - **HTTPS 与会话**。默认端口只绑定主机回环地址。对外提供 Dashboard 时，在同一主机的反向代理终止 TLS，转发到 `127.0.0.1:18080`，保留原始 Host，通过 HTTPS 登录；在 `.env` 中设置 `SECURE_COOKIE=true` 后执行 `docker compose up -d dashboard`。Admin API 仅允许可信管理网络访问。
 - **配置项**。见 [.env.example](.env.example)。`DASHBOARD_ENCRYPTION_KEY` 需要 64 位十六进制字符；`APISIX_IMAGE` 可指定演示网关镜像。首次启动用初始化脚本即可生成 Compose 所需凭据。
@@ -94,7 +95,7 @@ node scripts/seed-staging.mjs
 | 路由与上游 | 通过表单或 JSON 设置路径、域名、方法和嵌套条件；配置请求改写、重定向、服务引用、节点权重、负载均衡、重试和健康检查。 |
 | 服务配置 | 在「扩展资源 → 服务」设置域名和服务级插件，按名称或 ID 搜索并绑定当前集群的上游，也可直接配置节点、连接池和健康检查。[服务配置指南](docs/operations-guide.md#配置服务并选择上游) |
 | 插件与共享配置 | 按官方分类浏览集群已启用的插件，按 Schema 编辑。一条路由可引用一份包含多个插件的 Plugin Config；界面逐项显示继承、路由覆盖与停用状态。 |
-| 消费者与凭据 | 维护消费者、消费者组与独立 Credential；在消费者页面配置 API Key、Basic、JWT 等凭据，在路由启用对应插件。已保存的敏感值脱敏显示，支持轮换。 |
+| 消费者与凭据 | 管理消费者、消费者组和独立 Credential，配置和轮换 API Key、Basic、JWT 等凭据。可按路由或服务设置访问白名单，也可只为一种内联认证方式单独授权。 |
 | 草稿、差异、发布与回退 | 编辑时可校验配置，比较字段或 JSON 差异。直接发布会检查基线、Schema 和引用并回读；支持按记录回退或选择暂存草稿。 |
 | 共享策略与扩展资源 | 管理全局规则、插件元数据、Service、Stream Route、Proto 和 Secret 管理器，查看资源依赖。TLS 证书支持查询和目标环境引用。 |
 | 迁移与配置诊断 | 连同依赖导出脱敏配置包，映射目标资源 ID、域名和节点，解决冲突后一次发布到目标集群。输入请求方法、域名、路径，可离线分析候选路由和配置引用。 |
@@ -105,6 +106,20 @@ node scripts/seed-staging.mjs
 - 同时具备编辑和发布权限，可直接发布。生产环境需要输入目标集群名称；删除、上下线和批量删除会提示影响范围。
 - 只有编辑权限的账号点击「提交变更」，发布人在「发布记录」中确认即可执行。只读账号和只读集群不能写入。
 - 路由、上游和消费者编辑器保留可选的「保存草稿」，用于跨资源分次编辑。直接发布不会新增草稿记录。
+
+### 限定凭据可以访问哪些接口
+
+当前集群需启用 `consumer-restriction`，目标路由或服务需启用对应认证，例如 `key-auth`、`basic-auth` 或 `multi-auth`。在「消费者管理 → 编辑 → 认证访问范围」中选择「指定路由」或「指定服务」，搜索并勾选允许的目标，然后保存并发布。按服务授权会覆盖该服务下现有和以后绑定的路由。
+
+- **整个消费者共用一个范围**。按路由限制后，即使两条路由都启用了 Key Auth，同一把有效密钥也只能访问白名单中的路由。这个范围同时覆盖该消费者的其他认证方式和独立 Credential。
+- **只限制其中一种认证**。在已有消费者的认证插件行点击「单独授权」，填写新消费者用户名、选择目标并发布。例如只迁移 Key Auth，调用方继续使用原密钥，原消费者的 Basic 登录和独立 Credential 仍可按原策略访问。新身份继承消费者组、标签与其他策略，上游读到的 `X-Consumer-Username` 会变化。发布记录可查看两项变更并整体回退。网关按顺序解除旧绑定、创建新绑定，传播期间该凭据可能短暂返回 401。
+- **为一个现有接口签发新凭据**。从路由或服务的认证插件窗口点击「创建限定当前资源的凭据」，新消费者表单会预选对应路由或服务。编辑黑名单、按 HTTP 方法授权或过滤表达式时，可从插件列表打开完整的 `consumer-restriction` 配置。
+
+默认情况下，凭据有效但目标不在白名单时返回 403。按服务限制时，访问没有绑定服务的认证路由会返回 401。公开路由未执行消费者认证时仍按原配置转发。消费者上的同名插件优先于消费者组、路由和服务的配置，发布前应核对已有访问名单。[APISIX consumer-restriction 官方文档](https://apisix.apache.org/zh/docs/apisix/plugins/consumer-restriction/)
+
+白名单依赖消费者身份。`ldap-auth-advanced` 需要启用 `consumer_required`。`jwe-decrypt` 单独使用时只解密令牌，若要限制接口访问，可以同时启用 Key Auth 等身份认证并限制认证所得的消费者。JWE 密钥本身没有消费者白名单作用域。
+
+[七种认证的实测结果与复测命令](docs/consumer-plugin-verification.md#2026-11-17-消费者访问范围验收)
 
 ### 集群连接健康
 
@@ -125,6 +140,8 @@ node scripts/seed-staging.mjs
 | [![集群插件目录](docs/screenshots/plugins.png)](docs/screenshots/plugins.png) | [![预发环境的已发布变更](docs/screenshots/release.png)](docs/screenshots/release.png) |
 | **集群连接 · 管理地址及最近一次健康探测** | **插件配置 · 按字段查找说明并编辑参数** |
 | [![集群连接](docs/screenshots/cluster-connections.png)](docs/screenshots/cluster-connections.png) | [![插件配置表单](docs/screenshots/plugin-configuration.png)](docs/screenshots/plugin-configuration.png) |
+| **消费者访问范围 · 选择允许访问的路由或服务** | **单独授权 · 为一种内联认证指定访问范围** |
+| [![消费者路由白名单](docs/screenshots/consumer-access-scope.png)](docs/screenshots/consumer-access-scope.png) | [![单独授权一种认证](docs/screenshots/scope-one-credential.png)](docs/screenshots/scope-one-credential.png) |
 
 ## 开发与测试
 
@@ -143,12 +160,14 @@ npm run dev
 | 直接发布与回退 | [隔离 Docker 集成测试](docs/route-list-actions.md#直接发布的集成测试)覆盖全部 12 类可写资源，包含 HTTP 和 Stream 数据面验证。 |
 | 路由与真实代理 | 启动并初始化演示网关后运行 `npm run test:integration`、`npm run test:routes` |
 | 消费者与插件 | `npm run test:consumers`、`npm run test:consumer-plugins`。后者还会使用 Docker 启动独立的 LDAP 和 Wolf 协议测试服务。 |
+| 消费者访问范围 | 在已初始化的本地演示网关运行 `npm run test:e2e -- consumer-access-scope.spec.ts consumer-plugins.spec.ts consumers.spec.ts direct-publish.spec.ts`，验证逐插件真实请求、两类白名单、凭据迁移、权限、脱敏、发布与回退。 |
 | 双环境、权限与浏览器 | 启动并初始化两个演示环境，依次执行 `node scripts/test-operations.mjs`、`node scripts/test-access.mjs`、`npm run test:e2e`。Playwright 默认使用 Edge，可通过 `PLAYWRIGHT_CHANNEL` 切换到已安装的 Chrome。 |
 
 涉及网关写入的验收套件请在配套本地环境**串行**运行。项目代码分别位于 [web/src](web/src) 和 [server](server)。[deploy](deploy) 包含示例网关配置，[scripts](scripts) 和 [tests](tests) 包含初始化及验收工具。
 
 ## 进一步阅读
 
+- [V1.0.2 消费者访问范围与凭据单独授权](docs/releases/V1.0.2.md) · [V1.0.1 路由发布、插件配置与集群健康](docs/releases/V1.0.1.md)
 - [生产配置运维指南](docs/operations-guide.md) — 共享插件、扩展资源、迁移冲突、兼容范围与验收记录
 - [架构与发布语义](docs/architecture.md) · [管理接口](docs/api.md)
 - [账号权限与审计](docs/access-control.md) · [消费者认证配置与验证](docs/consumer-plugin-verification.md) · [高级路由实现与验收](docs/route-editor-verification.md)

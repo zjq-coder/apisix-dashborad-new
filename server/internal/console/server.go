@@ -111,6 +111,7 @@ func (s *Server) routes() {
 	s.handle("GET /api/v1/clusters/{cluster}/resources/{kind}/{resource}/impact", "view", "resource.impact", s.resourceImpact)
 	s.handle("POST /api/v1/clusters/{cluster}/export", "view", "bundle.export", s.exportResources)
 	s.handle("POST /api/v1/clusters/{cluster}/config/{mode}", "edit", "config.save", s.saveDraft)
+	s.handle("POST /api/v1/clusters/{cluster}/consumers/{consumer}/scope-credential/{mode}", "edit", "consumer.scope-credential", s.scopeCredential)
 	s.handle("POST /api/v1/clusters/{cluster}/routes/batch-delete/{mode}", "edit", "config.batch-delete", s.deleteRouteDrafts)
 	s.handle("POST /api/v1/clusters/{cluster}/routes/delete-drafts", "edit", "draft.save", s.deleteRouteDrafts)
 	s.handle("POST /api/v1/clusters/{cluster}/transfer/{step}", "view", "bundle.transfer", s.transfer)

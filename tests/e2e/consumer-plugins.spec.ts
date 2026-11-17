@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { randomBytes } from 'node:crypto';
 import { sandboxClient, sandboxProxy } from '../../scripts/sandbox-client.mjs';
 import { consumerAuthFixtures } from '../../scripts/consumer-auth-fixtures.mjs';
 
@@ -72,6 +73,96 @@ async function release(page: Page) {
     page.getByText('配置已写入，并通过 Admin API 回读确认', { exact: true }),
   ).toBeVisible();
 }
+// Exercise the actual credential for every supported plugin on two equally
+// protected routes. Assert only the status and trusted upstream identity, never
+// the full echoed headers (which can contain test credentials).
+async function verifyAccessScope(name: string, id: string) {
+  const twin = id + '-other',
+    scoped = id + '-scoped';
+  const root = '/clusters/' + cluster.id;
+  const source = await client.request(root + '/resources/consumers/' + id);
+  const destination = {
+    base_hash: source.hash,
+    username: scoped,
+    plugin: name,
+    type: 'route_id',
+    whitelist: [id],
+  };
+  const endpoint = root + '/consumers/' + id + '/scope-credential/apply';
+  const put = async (target: string, plugins: object) => {
+    expect(
+      (
+        await client.gateway('/routes/' + target, 'PUT', {
+          uri: '/' + target,
+          upstream: fixture.upstream,
+          plugins,
+        })
+      ).status,
+    ).toBeLessThan(300);
+  };
+  const visit = async (target: string, status: number, identity: string | null, extra = {}) => {
+    await expect
+      .poll(async () => {
+        const response = await sandboxProxy('/' + target, {
+          headers: { ...fixture.headers(name), ...extra },
+        });
+        const data = await response.json();
+        return [
+          response.status,
+          data.headers?.['x-consumer-username'] || null,
+          status === 403 ? data.message?.includes('route_id') : true,
+        ];
+      })
+      .toEqual([status, identity, true]);
+  };
+  const plugins = { [name]: fixture.routes[name] };
+  await put(twin, plugins);
+  await visit(twin, 200, name === 'jwe-decrypt' ? null : id);
+  let change;
+  if (name === 'jwe-decrypt') {
+    await expect(client.request(endpoint, 'POST', destination)).rejects.toMatchObject({
+      status: 400,
+    });
+    const key = randomBytes(20).toString('hex');
+    change = await client.request(root + '/config/apply', 'POST', {
+      resource_type: 'consumers',
+      resource_id: id,
+      action: 'update',
+      base_hash: source.hash,
+      value: {
+        ...source.value,
+        plugins: {
+          ...source.value.plugins,
+          'key-auth': { key },
+          'consumer-restriction': { type: 'route_id', whitelist: [id] },
+        },
+      },
+    });
+    expect((await client.waitChange(change.id)).status).toBe('succeeded');
+    // Decryption alone does not bind a consumer, even when its key owner has a scope.
+    await visit(twin, 200, null);
+    await put(id, { ...plugins, 'key-auth': {} });
+    await put(twin, { ...plugins, 'key-auth': {} });
+    await visit(id, 401, null);
+    await visit(id, 200, id, { apikey: key });
+    await visit(twin, 403, null, { apikey: key });
+  } else {
+    change = await client.request(endpoint, 'POST', destination);
+    expect((await client.waitChange(change.id)).status).toBe('succeeded');
+    await visit(id, 200, scoped);
+    await visit(twin, 403, null);
+    if (name === 'ldap-auth-advanced') {
+      await put(twin, { [name]: { ...fixture.routes[name], consumer_required: false } });
+      await visit(twin, 200, null);
+      await put(twin, plugins);
+      await visit(twin, 403, null);
+    }
+  }
+  const undo = await client.request('/changesets/' + change.id + '/rollback', 'POST', {});
+  await client.request('/changesets/' + undo.id + '/publish', 'POST', {});
+  expect((await client.waitChange(undo.id)).status).toBe('succeeded');
+  if (name !== 'jwe-decrypt') await visit(twin, 200, id);
+}
 for (const name of names)
   test(`${name}：消费者表单、路由提示、路由表单发布和真实认证`, async ({ page }) => {
     test.setTimeout(120_000);
@@ -133,7 +224,12 @@ for (const name of names)
           })
           .toBe(expected);
       }
+      await verifyAccessScope(name, id);
       await open(page, `/consumers/${id}/edit`);
+      if (name === 'jwe-decrypt') {
+        await expect(page.getByText('JWE 解密密钥的访问边界')).toBeVisible();
+        await expect(page.getByRole('button', { name: '单独授权 jwe-decrypt' })).toHaveCount(0);
+      }
       await page.getByRole('button', { name: `编辑插件 ${name}`, exact: true }).click();
       const schema = await client.request(
         `/clusters/${cluster.id}/plugins/${name}/schema?scope=consumer`,
@@ -171,6 +267,8 @@ for (const name of names)
       }
       expect(errors).toEqual([]);
     } finally {
+      await client.gateway(`/routes/${id}-other`, 'DELETE');
+      await client.gateway(`/consumers/${id}-scoped`, 'DELETE');
       await client.gateway(`/routes/${id}`, 'DELETE');
       await client.gateway(`/consumers/${id}`, 'DELETE');
       for (const draft of await client.request(`/drafts?cluster_id=${cluster.id}`))

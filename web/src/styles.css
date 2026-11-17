@@ -2806,6 +2806,111 @@ pre {
 .consumer-plugin-categories {
   margin: 8px 0 18px;
 }
+.scope-description {
+  margin: 0 0 16px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+.scope-picker {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  container-type: inline-size;
+}
+.scope-picker .ant-radio-group {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--faint);
+}
+.scope-picker .ant-radio-button-wrapper {
+  display: grid;
+  align-content: center;
+  height: auto;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.4;
+}
+.scope-picker .ant-radio-button-wrapper::before {
+  display: none;
+}
+.scope-picker .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  background: var(--panel);
+  box-shadow:
+    0 1px 4px #15274b24,
+    inset 0 0 0 1px var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.scope-picker .ant-radio-button-wrapper:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.scope-picker .ant-radio-button-wrapper-disabled {
+  opacity: 0.65;
+}
+@container (max-width: 420px) {
+  .scope-picker .ant-radio-group {
+    width: 100%;
+  }
+  .scope-picker .ant-radio-button-wrapper {
+    padding: 7px 4px;
+  }
+  .scope-picker .ant-radio-button-wrapper > span:last-child {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+  }
+}
+.scope-target-label,
+.split-credential-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scope-target-label {
+  margin-top: 6px;
+  font-weight: 600;
+  justify-content: space-between;
+}
+.scope-target-label small,
+.scope-hint,
+.scope-precedence {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.scope-hint {
+  margin: 0;
+}
+.consumer-scope > .ant-alert {
+  margin-bottom: 14px;
+}
+.scope-precedence {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.split-credential-summary {
+  margin: 16px 0 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
 .secret-field {
   min-width: 0;
 }

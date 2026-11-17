@@ -90,6 +90,7 @@ export function EditorForm({
   const { cluster, clusterId, go, can } = useConsole();
   const client = useQueryClient();
   const direct = useConfigWrite();
+  const [params] = useSearchParams();
   const { message } = App.useApp();
   const action = draft?.action || (resource && !copying ? 'update' : 'create');
   const initial = cleanConfig(
@@ -111,6 +112,13 @@ export function EditorForm({
             }),
   );
   if (copying && kind !== 'consumers') initial.name = `${initial.name || resource?.id}-copy`;
+  if (kind === 'consumers' && !resource && !draft) {
+    const type = params.get('scope');
+    const target = params.get('target') || '';
+    if ((type === 'route_id' || type === 'service_id') && /^[\w.-]{1,64}$/.test(target)) {
+      initial.plugins['consumer-restriction'] = { type, whitelist: [target] };
+    }
+  }
   if (copying && kind === 'consumers') {
     initial.username = `consumer-${crypto.randomUUID().slice(0, 8)}`;
     initial.plugins = {};
@@ -124,7 +132,6 @@ export function EditorForm({
       (kind === 'consumers' && initial.username) ||
       `${kind === 'routes' ? 'route' : 'upstream'}-${crypto.randomUUID().slice(0, 8)}`,
   );
-  const [params] = useSearchParams();
   const [mode, setMode] = useState(params.get('mode') === 'json' ? 'json' : 'form');
   const [section, setSection] = useState<EditorSection>('match');
   const [target, setTarget] = useState(() => targetOf(initial, action === 'create' && !copying));
@@ -136,6 +143,7 @@ export function EditorForm({
   const typeIssues = useMemo(() => formTypeErrors(kind, value), [kind, value]);
   const allowLeave = useRef(false);
   const baseline = useRef(pretty(initial));
+  const resourceHash = useRef(resource?.hash);
   const initialId = useRef(id);
   const dirty =
     raw !== baseline.current || id !== initialId.current || !!Object.keys(bufferErrors).length;
@@ -865,6 +873,11 @@ export function EditorForm({
                   readOnly={readOnly}
                   resourceId={resource?.id}
                   draftId={draft?.id}
+                  baseHash={action === 'update' && !draft ? resourceHash.current : undefined}
+                  dirty={dirty}
+                  scopeAvailable={catalog.data?.some(
+                    (item) => item.name === 'consumer-restriction',
+                  )}
                 />
               ) : (
                 <UpstreamFields value={value} onChange={update} readOnly={readOnly} />

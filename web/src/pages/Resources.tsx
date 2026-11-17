@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { type PluginDefinition } from '../plugins';
 import { api } from '../api';
+import { scopeMode, restriction } from '../consumerScope';
 import { useConsole } from '../context';
 import { Blank, NoCluster, PageTitle, Panel, RequestError } from '../components/Common';
 import { kindNames, type Draft, type Resource, type ResourceKind } from '../types';
@@ -264,6 +265,27 @@ export function Resources({ kind }: { kind: ResourceKind }) {
                       )}
                 </Tag>
               ),
+            },
+            {
+              title: t('认证访问范围'),
+              key: 'scope',
+              width: 160,
+              render: (_: unknown, r: Resource) => {
+                const policy = r.value.plugins?.[restriction];
+                const mode = scopeMode(policy);
+                if (mode === 'none') return <span className="muted">{t('继承现有策略')}</span>;
+                if (mode === 'advanced')
+                  return <Tag>{policy?._meta?.disable ? t('已停用') : t('自定义策略')}</Tag>;
+                return (
+                  <Tooltip title={policy.whitelist.join(', ')}>
+                    <Tag color="blue">
+                      {mode === 'route_id'
+                        ? t('{0} 条路由', policy.whitelist.length)
+                        : t('{0} 项服务', policy.whitelist.length)}
+                    </Tag>
+                  </Tooltip>
+                );
+              },
             },
             {
               title: t('消费者插件'),

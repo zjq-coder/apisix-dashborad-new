@@ -49,7 +49,9 @@ func (s *Server) insertChange(ctx context.Context, tx *sql.Tx, c Change) error {
 	if err != nil {
 		return err
 	}
-	orderOperations(c.Operations)
+	if c.RollbackOf == "" {
+		orderOperations(c.Operations)
+	}
 	for i, op := range c.Operations {
 		blob, err := s.Store.Vault.Seal(DraftPayload{SecretPolicyVersion: 1, Before: op.Before, After: op.After, SensitivePaths: op.SensitivePaths})
 		if err != nil {
@@ -391,7 +393,10 @@ func (s *Server) rollbackChange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := Change{ID: newID(), ClusterID: source.ClusterID, Title: "回退 · " + source.Title, Reason: "恢复变更 " + source.ID[:8] + " 执行前的配置", RollbackOf: source.ID, CreatedBy: actor(r)}
-	for _, op := range source.Operations {
+	// Undo successful writes in reverse execution order. In particular, remove a
+	// scoped identity before restoring its credential to the original consumer.
+	for i := len(source.Operations) - 1; i >= 0; i-- {
+		op := source.Operations[i]
 		if op.Status != "applied" {
 			continue
 		}

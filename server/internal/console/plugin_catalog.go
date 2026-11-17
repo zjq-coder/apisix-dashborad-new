@@ -15,6 +15,7 @@ type PluginDefinition struct {
 	Scope                string   `json:"scope"`
 	ConsumerConfigurable bool     `json:"consumer_configurable"`
 	ConsumerSource       string   `json:"consumer_source"`
+	CanScopeCredential   bool     `json:"can_scope_credential"`
 	ConsumerSecrets      []string `json:"consumer_secret_fields"`
 	RouteSecrets         []string `json:"route_secret_fields"`
 }
@@ -31,6 +32,13 @@ func pluginDefinition(name string, metadata Object) PluginDefinition {
 		consumer = route
 	}
 	d.ConsumerConfigurable = d.Scope != "global" && (d.ConsumerSource != "none" || d.Type != "auth")
+	// Admin API metadata describes credential storage, not runtime identity
+	// binding. Offer migration for verified binders only. For example JWE
+	// has an auth type and consumer schema but never calls attach_consumer.
+	switch name {
+	case "key-auth", "basic-auth", "jwt-auth", "hmac-auth", "ldap-auth", "ldap-auth-advanced", "wolf-rbac":
+		d.CanScopeCredential = d.Type == "auth" && d.ConsumerSource != "none"
+	}
 	d.ConsumerSecrets = schemaSecretFields(Object(consumer))
 	d.RouteSecrets = schemaSecretFields(Object(route))
 	return d

@@ -23,6 +23,7 @@
 | GET | `/clusters/{id}/plugins/{name}/schema?scope=route\|consumer` | 目标插件在对应上下文中的 Schema，默认 route |
 | POST | `/clusters/{id}/plugins/{name}/validate` | 校验插件，接收 `value`、`resource_type: routes\|consumers`（默认 routes）；编辑已有秘密时附 `resource_id` 或 `draft_id`，草稿与目标资源必须一致 |
 | POST | `/clusters/{id}/config/{mode}` | 创建、修改或删除单项网关配置 |
+| POST | `/clusters/{id}/consumers/{username}/scope-credential/{mode}` | 将已验证可绑定消费者身份的内联认证迁到具有路由或服务白名单的新消费者，能力见插件目录的 `can_scope_credential` 字段 |
 | POST | `/clusters/{id}/routes/batch-delete/{mode}` | 一次提交 1–50 条路由的 ID 与版本哈希 |
 | POST | `/clusters/{id}/transfer/{mode}` | 使用差异预览返回的 token 提交整个配置包 |
 | GET / POST | `/drafts` | 列表 / 创建草稿；列表支持 `cluster_id` |
@@ -46,6 +47,10 @@
 没有会话为 401；能访问集群但不能执行该操作为 403；无法访问的集群、草稿或变更详情与不存在的对象一样返回 404。省略 `cluster_id` 不会扩大可见范围。
 
 ## 直接提交和发布
+
+对整个消费者授权，通过单资源配置接口写入 `plugins.consumer-restriction`。独立授权接口接收原消费者的 `base_hash`、新消费者的 `username`、内联认证插件名 `plugin`、`type`（`route_id` 或 `service_id`）和包含目标 ID 的字符串数组 `whitelist`。服务端从网关读取原凭据并构造两项变更，密钥和密码沿用现有快照加密和响应脱敏。目标不存在、原消费者版本过期或新用户名已被占用时拒绝迁移。单独授权与其他配置共用以下权限和发布流程。
+
+迁移先更新原消费者，再创建新身份。如果第二项写入失败，凭据可能暂时无法认证。在该发布记录中选择「回退已应用配置」可以恢复原绑定。两项均成功时，回退会先删除新身份，再恢复原凭据。自定义认证插件需在网关认证阶段绑定消费者，单有消费者 Schema 无法令授权策略执行。
 
 `mode=apply` 需要目标集群的编辑与发布权限，`mode=submit` 需要编辑权限。生产环境直接发布还需在 `X-Confirm-Cluster` 请求头中传入 URL 编码后的集群名称。两种模式都会生成一条变更记录。HTTP 201 表示受理成功，返回 `id/cluster_id/status`。通过 `GET /changesets/{id}` 查看最终结果和脱敏差异。提交待发布变更后，发布人可以通过原有的发布接口执行。
 

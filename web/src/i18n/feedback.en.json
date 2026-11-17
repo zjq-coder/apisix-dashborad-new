@@ -1,4 +1,11 @@
 {
+  "此插件未确认支持消费者身份绑定，无法单独迁移授权": "Consumer identity binding has not been verified for this plugin. Scoped credential migration is unavailable.",
+  "consumer.scope-credential": "Scope an authentication method",
+  "授权目标 ID 无效或重复": "Scope target IDs must be valid and unique.",
+  "授权目标已变化，请刷新后重新选择": "A scope target no longer exists. Refresh the list and select again.",
+  "当前集群未启用 consumer-restriction": "The cluster does not have consumer-restriction enabled.",
+  "请选择原消费者已配置的内联认证插件": "Choose an inline authentication plugin already configured on the original consumer.",
+  "当前集群无法识别消费者插件 {0}": "The cluster does not recognize consumer plugin {0}.",
   "请求来源不受信任": "Untrusted request origin",
   "尝试次数过多，请稍后再试": "Too many attempts. Try again later.",
   "用户名或密码不正确": "Incorrect username or password",
